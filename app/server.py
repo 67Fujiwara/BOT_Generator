@@ -24,6 +24,28 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parent.parent      # bot-team/
+
+
+def _hide_child_windows():
+    """Agent SDK が起動する Claude Code (claude.exe) にコンソール窓を出させない。
+    pythonw（窓なし）から子プロセスを起動すると Windows が新しい窓を付けるので、
+    SDK が使う anyio.open_process を包んで CREATE_NO_WINDOW を足す。Windows 以外は素通し。"""
+    import subprocess
+
+    import anyio
+
+    orig = anyio.open_process
+    flag = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+
+    async def open_process_no_window(*args, **kw):
+        if flag:
+            kw["creationflags"] = kw.get("creationflags", 0) | flag
+        return await orig(*args, **kw)
+
+    anyio.open_process = open_process_no_window
+
+
+_hide_child_windows()
 INBOX = ROOT / "inbox"
 AGENTS_DIR = ROOT / ".claude" / "agents"
 HOST, PORT = "127.0.0.1", 8765

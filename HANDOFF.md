@@ -64,6 +64,7 @@ bot-team/
                           起動済みなら GET /version で印を比べ、同じなら開くだけ、古ければ POST /shutdown で止めて入れ替える（git pull 後も run.bat だけでよい）
   autostart_on/off.bat    Windows ログオン時の自動起動を登録 / 解除（スタートアップにショートカット）
                           終了は画面左上 ⏻ → POST /shutdown。pythonw のときの出力は app/server.log（git 対象外）
+                          server.py 冒頭の _hide_child_windows() が anyio.open_process を包み、Windows では claude.exe に CREATE_NO_WINDOW を付ける（送信のたびに黒い窓が出ない）
 ```
 
 `.claude/agents/*.md` のフロントマターに `group:` と `color:` を足すと左一覧のグループ分けと色に反映される（Claude Code 自体はこの2項目を無視する想定）。
