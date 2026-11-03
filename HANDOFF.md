@@ -26,6 +26,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 |---|---|---|---|---|
 | ポテト | potato | 2つのリスト（BOM / 購買リスト / 正式見積PDF / 発注書Excel）を突き合わせ、漏れ・余分・数量不一致・単価不一致・金額合計差を報告 | Read, Bash, Glob | 購買・リスト |
 | レックス | rex | 購買の相見積もりスコア(Excel)から商社ごとの金額を拾い、BOM(Excel)に転記した `<BOM名>_見積.xlsx` を作る。右端に商社ごとの単価・金額列。型式不一致は空欄＋要確認 | Read, Bash, Glob | 購買・リスト |
+| ジェシー | jessie | タスク管理。文から仕事と納期を拾って `tasks.py` で登録、納期なしは聞き返す。右パネル「タスク」タブにチェックボックスで常設、期限で催促ポップアップ | Bash | 管理 |
 | バズ | buzz | 検証役。`tests/run_tests.py` を1回の Bash で回して PASS/FAIL を報告。直さない | Bash, Read, Glob | 検証 |
 | スリンキー | slinky | 録音/文字起こし → `transcribe.py`（文字起こし＋フィラー除去）→ 議事録 md（決定事項/ToDo/論点）。日時・参加者が不明なら1回聞く | Bash, Read, Glob, Write | 文章 |
 | ハム（旧ポーク） | ham | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可）。model: haiku | なし | 文章 |
@@ -40,7 +41,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 bot-team/
   CLAUDE.md               プロジェクト説明（各ボットの呼び方、共通ルール、入口の説明）
   HANDOFF.md              このファイル
-  .claude/agents/         potato.md  ham.md  rex.md  buzz.md  slinky.md
+  .claude/agents/         potato.md  ham.md  rex.md  buzz.md  slinky.md  jessie.md
   .claude/bot_rules.md    全ボット共通ルール（足りない情報は先に聞く）。server.py が毎回システムプロンプトに追記
   scripts/
     extract_items.py      PDF/Excel/CSV → 標準CSV（型式,型式KEY,品名,数量,単価,金額,メーカ,備考）
@@ -57,6 +58,8 @@ bot-team/
     transcribe.py         スリンキー用。音声→文字起こし（openai: gpt-4o-transcribe / whisper: faster-whisper large-v3）→ clean() でフィラー・言い直し除去
                           build_prompt(用語, 直前末尾) / looks_hallucinated / low_confidence / transcribe_chunk を server.py の /transcribe/chunk も使う
                           .txt を渡せば整形だけ。25MB 超は ffmpeg で 10 分分割。OPENAI_API_KEY は ⚙ の「文字起こし API キー」→ _sdk_env() で渡す
+    tasks.py              ジェシー用。app/tasks.json に登録/完了/一覧。parse_due() が「すぐ/今週中/今月中旬/11/20/金曜/3日後/なし」を
+                          due_start〜due_end に変換（解釈不能は終了コード 3）。status() が 期限切れ/すぐ/今日まで/期間内/予定/納期なし。--store で保存先差し替え（テスト用）
     check_lists.py        上2つをまとめて実行（抽出×2→比較→レポート標準出力）。ポテトはこれを1回の Bash で呼ぶ
                           終了コード: 差分なし 0 / あり 1 / 抽出失敗 2（--cols-base / --cols-target で列指定）
   app/
@@ -67,6 +70,7 @@ bot-team/
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , /samples/{bot} , /version ,
                           POST /chat (SSE) , /settings , /settings/test , /samples/{bot} , /transcribe/chunk , /transcribe/finish , /shutdown , DELETE /samples/{bot}
+                          GET/POST /tasks , POST /tasks/{id}/(done|undone|remove|reminded|snooze|due)
                           config.json: api_key, openai_api_key, cf_account_id, cf_api_token, transcribe_engine(auto|cloudflare|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
@@ -107,6 +111,7 @@ bot-team/
 | ハム（旧ポーク）直接（haiku） | 3.8〜3.9 s | 整えた文だけ返る |
 | ハム（旧ポーク）直接（sonnet） | 2.5 s | 1回のみの計測。haiku と大差なし |
 | レックス直接（sonnet） | 10.8 s | 合成 BOM＋スコアで Bash 1回（fill_prices.py）。このクラウド環境での計測 |
+| ジェシー直接（sonnet） | 22.8 s / 6.4 s | 2 件のうち納期なしの 1 件を聞き返し＋1 件登録 / 答えを受けて登録。Bash 1 回ずつ |
 | バズ直接（haiku） | 16.5 s | 8 ケースを Bash 1回で実行。大半はスクリプト実行時間（pandas 起動×8） |
 | ポテト直接（sonnet） | 未計測 | 2026-11-03 に Bash 往復を 3〜4 回 → 1 回（check_lists.py）に削減。実ファイルで計測して埋める |
 

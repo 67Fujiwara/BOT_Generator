@@ -17,7 +17,7 @@ import sys
 import threading
 import webbrowser
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
@@ -123,7 +123,7 @@ def _front(path: Path) -> dict:
     txt = path.read_text(encoding="utf-8")
     head = txt.split("---")[1] if txt.startswith("---") else ""
     out = {}
-    for key in ("name", "description", "model", "group", "color", "shape", "record"):
+    for key in ("name", "description", "model", "group", "color", "shape", "record", "tasks"):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
@@ -178,6 +178,7 @@ def list_bots() -> list[dict]:
             "tools": f["tools"], "samples": f["samples"],
             "color": f.get("color", PALETTE[sum(bid.encode()) % len(PALETTE)]),   # 既定色は id から決める（ファイルが増えても変わらない）
             "shape": f.get("shape", ""), "record": f.get("record", "").lower() in ("true", "yes", "1"),
+            "tasks": f.get("tasks", "").lower() in ("true", "yes", "1"),
             "preview": (last.get("text") or "")[:60].replace("\n", " "),
             "status": "",
         })
@@ -299,6 +300,70 @@ def transcribe_finish(meeting: str = Form(""), text: str = Form("")):
     p = d / "文字起こし_raw.txt"
     p.write_text(text, encoding="utf-8")
     return {"ok": True, "path": str(p.relative_to(ROOT))}
+
+
+# ---- タスク（ジェシー）: scripts/tasks.py と同じ app/tasks.json を読む ----------------------------
+def _tasks_mod():
+    import sys as _sys
+    if str(ROOT / "scripts") not in _sys.path:
+        _sys.path.insert(0, str(ROOT / "scripts"))
+    import tasks as tk
+    return tk
+
+
+def _task_view(t: dict, tk) -> dict:
+    return {**t, "status": tk.status(t), "text": tk.fmt(t)}
+
+
+@app.get("/tasks")
+def get_tasks(all: bool = False):
+    tk = _tasks_mod()
+    order = {"期限切れ": 0, "すぐ": 1, "今日まで": 2, "期間内": 3, "予定": 4, "納期なし": 5, "完了": 6}
+    ts = [t for t in tk._load() if all or not t.get("done")]
+    ts.sort(key=lambda x: (order[tk.status(x)], x.get("due_end") or "9999", x["id"]))
+    return {"today": datetime.now().date().isoformat(), "tasks": [_task_view(t, tk) for t in ts]}
+
+
+@app.post("/tasks")
+def add_task(title: str = Form(...), due: str = Form(""), note: str = Form("")):
+    tk = _tasks_mod()
+    if not title.strip():
+        return {"ok": False, "error": "タスク名を入れてください"}
+    try:
+        t = tk.add_task(title, due or "なし", note)
+    except ValueError:
+        return {"ok": False, "error": f"納期「{due}」を解釈できません。すぐ / 今週中 / 今月中旬 / 11/20 / なし のように入れてください。"}
+    return {"ok": True, "task": _task_view(t, tk)}
+
+
+@app.post("/tasks/{task_id}/{action}")
+def task_action(task_id: int, action: str, text: str = Form("")):
+    tk = _tasks_mod()
+    tasks = tk._load()
+    t = next((x for x in tasks if x["id"] == task_id), None)
+    if not t:
+        return {"ok": False, "error": "そのタスクはありません"}
+    now = datetime.now().isoformat(timespec="minutes")
+    if action == "done":
+        t["done"], t["done_at"] = True, now
+    elif action == "undone":
+        t["done"], t["done_at"] = False, None
+    elif action == "remove":
+        tasks.remove(t)
+    elif action == "reminded":
+        t["last_reminded"] = now
+    elif action == "snooze":                      # 2 時間後まで催促しない
+        t["last_reminded"] = now
+        t["snooze_until"] = (datetime.now() + timedelta(hours=2)).isoformat(timespec="minutes")
+    elif action == "due":
+        due = tk.parse_due(text)
+        if due is None:
+            return {"ok": False, "error": f"納期「{text}」を解釈できません"}
+        t.update({"due_label": due["label"], "due_start": due["start"], "due_end": due["end"], "asap": due["asap"]})
+    else:
+        return {"ok": False, "error": "不明な操作"}
+    tk._save(tasks)
+    return {"ok": True}
 
 
 @app.get("/version")
@@ -439,6 +504,11 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
         prompt = "お願いします"
     if saved:
         prompt += "\n\nファイル:\n" + "\n".join(f"- {p.relative_to(ROOT)}" for p in saved)
+    if agent and agent.get("tasks", "").lower() in ("true", "yes", "1"):
+        tk = _tasks_mod()
+        open_tasks = [t for t in tk._load() if not t.get("done")]
+        head = "現在の未完了タスク:\n" + ("\n".join(tk.fmt(t) for t in open_tasks) if open_tasks else "（なし）")
+        prompt = head + "\n\n依頼:\n" + prompt
     if agent:
         smp = [(lab, f) for lab, fs in list_samples(bot_id, agent["samples"]).items() for f in fs]
         if smp:

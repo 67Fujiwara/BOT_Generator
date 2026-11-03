@@ -40,6 +40,7 @@ def main():
         "えーと、本日の、あの、打ち合わせですが、まあ、KV-8000 の納期の件ですね。\n"
         "えー、その その 納期は、うーん、11月20日で、はい、確定しました。\n"
         "あのー、担当は藤原さんで、えっとー、発注書は、なんか、PDF で送ります。\n", encoding="utf-8")
+    (OUT / "tasks.json").write_text("[]", encoding="utf-8")   # ジェシー用: 空のタスク置き場
     print(f"fixtures → {OUT}", file=sys.stderr)
 
 

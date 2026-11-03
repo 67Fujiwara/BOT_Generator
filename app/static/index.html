@@ -100,6 +100,29 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .pane .mono{font:12px var(--mono);word-break:break-all}
 .toollog{font:12px var(--mono);color:var(--muted);border-left:2px solid var(--line);padding-left:10px;margin:0;white-space:pre-wrap;max-height:50vh;overflow-y:auto}
 .filelist{list-style:none;padding:0;margin:0} .filelist li{font:12px var(--mono);padding:4px 0;border-bottom:1px solid var(--line);word-break:break-all}
+/* タスク（右パネル常設タブ） */
+.tabs button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--err);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.tabs button .badge:empty{display:none}
+.task-add{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.task-add input{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink)}
+.task-add .row2{display:flex;gap:6px} .task-add .row2 input{flex:1} .task-add button{border:1px solid var(--line);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.tasklist{list-style:none;padding:0;margin:0}
+.tasklist li{display:grid;grid-template-columns:22px 1fr auto;gap:6px 8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
+.tasklist input[type=checkbox]{width:16px;height:16px;margin-top:3px;cursor:pointer}
+.tasklist .tt{font-size:13.5px;line-height:1.5;word-break:break-word} .tasklist li.done .tt{color:var(--muted);text-decoration:line-through}
+.tasklist .due{font-size:12px;color:var(--muted);margin-top:2px}
+.tasklist .st{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--bubble);color:var(--muted);white-space:nowrap}
+.tasklist .st.期限切れ,.tasklist .st.すぐ{background:var(--err);color:#fff} .tasklist .st.今日まで{background:var(--caution);color:#1A2230} .tasklist .st.期間内{background:var(--accent);color:#fff}
+.tasklist .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;grid-column:3} .tasklist .x:hover{color:var(--err)}
+.tasklist .note{grid-column:2/4;font-size:12px;color:var(--muted)}
+.task-foot{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:12px;color:var(--muted)} .task-foot button{border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
+/* 催促ポップアップ */
+.toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(380px,92vw)}
+.toast{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--err);border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.25);font-size:13px;animation:toastin .25s ease-out}
+.toast .tl{font-weight:600;margin-bottom:4px} .toast .tb{display:flex;gap:6px;margin-top:8px}
+.toast .tb button{border:1px solid var(--line);background:none;color:var(--ink);border-radius:6px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}
+.toast .tb button.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+@keyframes toastin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 /* サンプル置き場（右パネル） */
 .samples{margin-top:16px;border-top:1px solid var(--line);padding-top:10px}
 .samples h3{font-size:12px;color:var(--muted);margin:0 0 4px;font-weight:500}
@@ -171,10 +194,20 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <button role="tab" aria-selected="true" data-pane="detail">詳細</button>
     <button role="tab" aria-selected="false" data-pane="log">作業ログ</button>
     <button role="tab" aria-selected="false" data-pane="files">ファイル</button>
+    <button role="tab" aria-selected="false" data-pane="tasks">タスク<span class="badge" id="taskBadge"></span></button>
   </div>
   <div class="pane" id="pane-detail"></div>
   <div class="pane" id="pane-log" hidden><pre class="toollog" id="toollog">（まだ何もしていません）</pre></div>
   <div class="pane" id="pane-files" hidden><ul class="filelist" id="filelist"></ul></div>
+  <div class="pane" id="pane-tasks" hidden>
+    <form class="task-add" id="taskAdd">
+      <input id="taskTitle" placeholder="タスク（例: ダイヤに発注書を送る）" autocomplete="off">
+      <div class="row2"><input id="taskDue" placeholder="納期（すぐ / 今週中 / 今月中旬 / 11/20 / なし）" autocomplete="off"><button type="submit">追加</button></div>
+    </form>
+    <ul class="tasklist" id="tasklist"></ul>
+    <div class="task-foot"><span id="taskCount"></span><button type="button" id="taskShowDone">完了も表示</button><button type="button" id="taskNotify">通知を許可</button></div>
+  </div>
+  <div class="toasts" id="toasts"></div>
 </aside>
 
 <dialog class="settings" id="settings">
@@ -258,6 +291,7 @@ const SHAPES={
   buzz:  {d:'M8 78C8 62 18 56 28 54C24 8 76 8 72 54C82 56 92 62 92 78C92 90 80 93 72 93L28 93C20 93 8 90 8 78Z', ex:50, ey:36, dx:11, er:8},
   slinky:{d:'M8 46C8 28 36 26 38 44L38 50C55 48 72 48 86 50C90 44 94 38 96 36C97 44 94 54 90 60C92 70 86 74 78 74L30 74C20 74 14 70 12 60C8 56 8 52 8 46Z', ex:22, ey:40, dx:6, er:5},
   woody: {d:'M6 40C6 33 20 32 30 33C30 10 70 10 70 33C80 32 94 33 94 40C94 46 82 46 74 45C76 60 72 80 60 90C56 94 44 94 40 90C28 80 24 60 26 45C18 46 6 46 6 40Z', ex:50, ey:62, dx:10, er:7},
+  jessie:{d:'M4 38C6 32 18 31 30 32C30 18 36 8 44 8C47 12 53 12 56 8C64 8 70 18 70 32C82 31 94 32 96 38C96 44 84 44 76 43C78 52 78 60 76 66C84 72 90 84 86 96C80 97 76 92 74 86C72 84 70 80 70 76C66 86 56 92 50 92C40 92 30 84 26 66C22 60 24 50 26 43C16 44 4 44 4 38Z', ex:50, ey:58, dx:10, er:7},
   potato:{d:'M36 24C34 2 66 2 64 24C72 24 74 27 70 29C78 33 82 40 84 48C92 50 94 64 84 66C82 84 68 96 50 96C32 96 18 84 16 66C6 64 8 50 16 48C18 40 22 33 30 29C26 27 28 24 36 24Z', ex:50, ey:54, dx:10, er:7.5},
   ham:   {d:'M22 44C14 36 14 24 20 22C26 20 32 26 34 28C44 22 60 22 70 28C74 24 82 20 86 24C90 30 86 38 82 42C92 56 90 78 76 88C64 94 40 94 28 86C18 80 14 70 16 60C8 58 6 48 12 46C14 44 18 44 22 44Z', ex:52, ey:46, dx:11, er:7},
   rex:   {d:'M6 42C20 28 44 20 64 22C84 24 94 38 92 56C90 70 82 80 68 82C60 84 54 82 50 78C46 88 34 94 20 92C10 90 4 84 6 76C10 72 24 70 44 70C40 64 30 58 20 54C14 52 8 50 6 48C4 46 4 44 6 42Z', ex:68, ey:40, dx:8, er:6.5},
@@ -321,8 +355,68 @@ async function select(b){
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
   hist.forEach(m=>m.role==='me'?append('msg me',esc(m.text)+fileChips(m.files)):append('msg bot-msg',md(m.text)));
   $('#rec').hidden=!b.record;
+  if(b.tasks) document.querySelector('.tabs button[data-pane="tasks"]').click();
   input.focus();
 }
+/* ── タスク（ジェシー）: 右パネルの常設タブ。チャットが流れても残る。1 分ごとに見直して催促する ── */
+let tasksCache=[], showDone=false, tasksToday='';
+function dueText(t){ if(!t.due_end) return t.due_label||'納期なし'; const f=d=>d.slice(5).replace('-','/'); return `${t.due_label}: ${f(t.due_start)}${t.due_start!==t.due_end?'〜'+f(t.due_end):''}`; }
+async function loadTasks(){
+  let d; try{ d=await (await fetch('/tasks'+(showDone?'?all=1':''))).json(); }catch(e){ return; }
+  tasksCache=d.tasks; tasksToday=d.today;
+  const open=d.tasks.filter(t=>!t.done); $('#taskBadge').textContent=open.length||'';
+  const ul=$('#tasklist'); ul.innerHTML='';
+  if(!d.tasks.length){ ul.innerHTML='<li style="display:block;color:var(--muted);font-size:13px">タスクはありません。ジェシーに「〜やっといて、来週まで」のように言うか、上の欄から追加できます。</li>'; }
+  d.tasks.forEach(t=>{
+    const li=document.createElement('li'); li.className=t.done?'done':'';
+    li.innerHTML=`<input type="checkbox" ${t.done?'checked':''} title="${t.done?'未完了に戻す':'完了にする'}"><div><div class="tt">${esc(t.title)}</div><div class="due">${esc(dueText(t))}</div></div><span class="st ${esc(t.status)}">${esc(t.status)}</span>${t.note?`<div class="note">${esc(t.note)}</div>`:''}<button class="x" title="削除">×</button>`;
+    li.querySelector('input').onchange=async e=>{ await fetch(`/tasks/${t.id}/${e.target.checked?'done':'undone'}`,{method:'POST'}); loadTasks(); };
+    li.querySelector('.x').onclick=async()=>{ if(confirm(`「${t.title}」を削除しますか？`)){ await fetch(`/tasks/${t.id}/remove`,{method:'POST'}); loadTasks(); } };
+    ul.appendChild(li);
+  });
+  $('#taskCount').textContent=`未完了 ${open.length} 件`;
+  $('#taskShowDone').textContent=showDone?'完了を隠す':'完了も表示';
+  checkReminders();
+}
+$('#taskAdd').onsubmit=async e=>{
+  e.preventDefault(); const fd=new FormData(); fd.append('title',$('#taskTitle').value); fd.append('due',$('#taskDue').value);
+  const r=await (await fetch('/tasks',{method:'POST',body:fd})).json();
+  if(!r.ok){ alert(r.error); return; }
+  $('#taskTitle').value=''; $('#taskDue').value=''; loadTasks();
+};
+$('#taskShowDone').onclick=()=>{ showDone=!showDone; loadTasks(); };
+$('#taskNotify').onclick=()=>{ if('Notification' in window) Notification.requestPermission().then(p=>{ $('#taskNotify').textContent=p==='granted'?'通知: 許可済み':'通知を許可'; }); };
+if('Notification' in window&&Notification.permission==='granted') $('#taskNotify').textContent='通知: 許可済み';
+
+/* 催促のルール: 期限切れ・今日まで・「すぐ」は 2 時間ごと、期間内（今月中旬など）は 1 日 1 回。あとで→2 時間止める */
+function toast(t){
+  const box=$('#toasts'); if([...box.children].some(x=>x.dataset.id==String(t.id))) return;
+  const el=document.createElement('div'); el.className='toast'; el.dataset.id=t.id;
+  const why={'期限切れ':'期限を過ぎています','今日まで':'今日が期限です','すぐ':'「すぐ」のまま残っています','期間内':`${t.due_label} のタスクです`}[t.status]||t.status;
+  el.innerHTML=`<div class="tl">${esc(t.title)}</div><div>${esc(why)}（${esc(dueText(t))}）</div><div class="tb"><button class="p">完了</button><button>あとで（2時間）</button><button>閉じる</button></div>`;
+  const [bd,bs,bc]=el.querySelectorAll('button');
+  bd.onclick=async()=>{ await fetch(`/tasks/${t.id}/done`,{method:'POST'}); el.remove(); loadTasks(); };
+  bs.onclick=async()=>{ await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
+  bc.onclick=()=>el.remove();
+  box.appendChild(el);
+  if('Notification' in window&&Notification.permission==='granted'&&document.hidden) new Notification('ジェシー: '+t.title,{body:why+'（'+dueText(t)+'）'});
+}
+async function checkReminders(){
+  const now=new Date(), H=3600e3;
+  for(const t of tasksCache){
+    if(t.done||!t.due_end) continue;
+    if(t.snooze_until&&new Date(t.snooze_until)>now) continue;
+    const last=t.last_reminded?new Date(t.last_reminded):null, since=last?now-last:Infinity;
+    let fire=false;
+    if(t.status==='期限切れ'||t.status==='今日まで') fire=since>2*H;
+    else if(t.status==='すぐ') fire=since>2*H&&(now-new Date(t.created))>4*H;
+    else if(t.status==='期間内') fire=!last||last.toDateString()!==now.toDateString();
+    if(fire){ toast(t); await fetch(`/tasks/${t.id}/reminded`,{method:'POST'}); t.last_reminded=now.toISOString(); }
+  }
+}
+loadTasks(); setInterval(loadTasks,60000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadTasks(); });
+
 /* ── ライブ録音（スリンキー）: マイク（＋任意でオンライン会議のタブ音声）を 1 本に合成し、
    区切りごとに stop→start で完結した webm を作って /transcribe/chunk に順番に送る。
    文字は届き次第チャットに出し、停止すると全文を文字起こし txt として添付してスリンキーに送る。 ── */
@@ -470,7 +564,7 @@ async function send(){
     }
   }catch(e){ append('error','サーバーに届きません。python app/server.py が動いているか確認してください。'); }
   busy.delete(b.id); setStatus(b,''); sendBtn.disabled=false; input.focus();
-  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles();
+  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles(); loadTasks();
 }
 
 sendBtn.onclick=send;
@@ -564,7 +658,7 @@ $('#setTest').onclick=async()=>{
 loadSettings().then(st=>{ let seen=false; try{seen=!!localStorage.getItem('settingsSeen');}catch(e){} if(!st.api_key_set&&!st.env_key_set&&!seen) openSettings(); });
 document.querySelectorAll('.tabs button').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true');
-  ['detail','log','files'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles();
+  ['detail','log','files','tasks'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles(); if(t.dataset.pane==='tasks') loadTasks();
 });
 let dragDepth=0;
 document.addEventListener('dragenter',e=>{e.preventDefault();if(++dragDepth===1)document.body.classList.add('drag');});

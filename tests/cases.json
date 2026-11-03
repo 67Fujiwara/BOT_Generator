@@ -1,18 +1,178 @@
 [
-  {"name": "potato-差分あり", "cmd": "python scripts/check_lists.py {fx}/bom.xlsx {fx}/order.csv --report {fx}/report.md",
-   "exit": 1, "contains": ["漏れ（基準にあるが対象にない） 1件", "ＦＸ５Ｕ－32MR", "余分（対象にあるが基準にない） 1件", "OMRON-G2R", "数量不一致 1件", "単価不一致 1件", "差 -2,500"]},
-  {"name": "potato-同一ファイルは不一致なし", "cmd": "python scripts/check_lists.py {fx}/bom.xlsx {fx}/bom.xlsx --report {fx}/report.md",
-   "exit": 0, "contains": ["不一致なし"]},
-  {"name": "potato-列の手動指定", "cmd": "python scripts/extract_items.py {fx}/order.csv {fx}/o.csv --cols 型式=部品型番 数量=数",
-   "exit": 0, "contains": ["'型式': '部品型番'", "'数量': '数'"]},
-  {"name": "potato-存在しないファイルは終了コード2", "cmd": "python scripts/check_lists.py {fx}/bom.xlsx {fx}/nothere.csv --report {fx}/report.md",
-   "exit": 2, "contains": ["抽出失敗", "--show-columns"]},
-  {"name": "rex-転記と要確認", "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --with-amount --out {fx}/out.xlsx",
-   "exit": 1, "contains": ["商社 3 社", "転記 4 行 / BOM 5 行", "G2R-1-SN", "XW2B20G4", "A商社"], "not_contains": ["a商社", "単価 単価"]},
-  {"name": "rex-商社列の手動指定", "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --vendors エース商事=A商社 ベスト=B商社 --out {fx}/out2.xlsx",
-   "exit": 1, "contains": ["商社 2 社", "エース商事", "ベスト"]},
-  {"name": "rex-show-columns", "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --show-columns",
-   "exit": 0, "contains": ["BOM 見出し行: 2", "スコア 見出し行: 2", "商社列の判定"]},
-  {"name": "slinky-フィラー除去", "cmd": "python scripts/transcribe.py {fx}/raw.txt --clean-only --out {fx}/clean.txt",
-   "exit": 0, "contains": ["KV-8000", "11月20日", "藤原", "PDF"], "not_contains": ["えーと", "あの、", "まあ、", "うーん", "その その", "えっとー", "なんか、"]}
+  {
+    "name": "potato-差分あり",
+    "cmd": "python scripts/check_lists.py {fx}/bom.xlsx {fx}/order.csv --report {fx}/report.md",
+    "exit": 1,
+    "contains": [
+      "漏れ（基準にあるが対象にない） 1件",
+      "ＦＸ５Ｕ－32MR",
+      "余分（対象にあるが基準にない） 1件",
+      "OMRON-G2R",
+      "数量不一致 1件",
+      "単価不一致 1件",
+      "差 -2,500"
+    ]
+  },
+  {
+    "name": "potato-同一ファイルは不一致なし",
+    "cmd": "python scripts/check_lists.py {fx}/bom.xlsx {fx}/bom.xlsx --report {fx}/report.md",
+    "exit": 0,
+    "contains": [
+      "不一致なし"
+    ]
+  },
+  {
+    "name": "potato-列の手動指定",
+    "cmd": "python scripts/extract_items.py {fx}/order.csv {fx}/o.csv --cols 型式=部品型番 数量=数",
+    "exit": 0,
+    "contains": [
+      "'型式': '部品型番'",
+      "'数量': '数'"
+    ]
+  },
+  {
+    "name": "potato-存在しないファイルは終了コード2",
+    "cmd": "python scripts/check_lists.py {fx}/bom.xlsx {fx}/nothere.csv --report {fx}/report.md",
+    "exit": 2,
+    "contains": [
+      "抽出失敗",
+      "--show-columns"
+    ]
+  },
+  {
+    "name": "rex-転記と要確認",
+    "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --with-amount --out {fx}/out.xlsx",
+    "exit": 1,
+    "contains": [
+      "商社 3 社",
+      "転記 4 行 / BOM 5 行",
+      "G2R-1-SN",
+      "XW2B20G4",
+      "A商社"
+    ],
+    "not_contains": [
+      "a商社",
+      "単価 単価"
+    ]
+  },
+  {
+    "name": "rex-商社列の手動指定",
+    "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --vendors エース商事=A商社 ベスト=B商社 --out {fx}/out2.xlsx",
+    "exit": 1,
+    "contains": [
+      "商社 2 社",
+      "エース商事",
+      "ベスト"
+    ]
+  },
+  {
+    "name": "rex-show-columns",
+    "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --show-columns",
+    "exit": 0,
+    "contains": [
+      "BOM 見出し行: 2",
+      "スコア 見出し行: 2",
+      "商社列の判定"
+    ]
+  },
+  {
+    "name": "slinky-フィラー除去",
+    "cmd": "python scripts/transcribe.py {fx}/raw.txt --clean-only --out {fx}/clean.txt",
+    "exit": 0,
+    "contains": [
+      "KV-8000",
+      "11月20日",
+      "藤原",
+      "PDF"
+    ],
+    "not_contains": [
+      "えーと",
+      "あの、",
+      "まあ、",
+      "うーん",
+      "その その",
+      "えっとー",
+      "なんか、"
+    ]
+  },
+  {
+    "name": "jessie-納期の解釈（来週）",
+    "cmd": "python scripts/tasks.py parse 来週",
+    "exit": 0,
+    "contains": [
+      "\"start\"",
+      "\"end\"",
+      "\"asap\": false"
+    ]
+  },
+  {
+    "name": "jessie-納期の解釈（すぐ）",
+    "cmd": "python scripts/tasks.py parse すぐ",
+    "exit": 0,
+    "contains": [
+      "\"asap\": true"
+    ]
+  },
+  {
+    "name": "jessie-納期の解釈（今月中旬）",
+    "cmd": "python scripts/tasks.py parse 今月中旬",
+    "exit": 0,
+    "contains": [
+      "-11\"",
+      "-20\""
+    ]
+  },
+  {
+    "name": "jessie-解釈できない納期は3",
+    "cmd": "python scripts/tasks.py parse そのうち",
+    "exit": 3,
+    "contains": [
+      "解釈できません"
+    ]
+  },
+  {
+    "name": "jessie-登録",
+    "cmd": "python scripts/tasks.py --store {fx}/tasks.json add ダイヤに発注書を送る --due 来週",
+    "exit": 0,
+    "contains": [
+      "登録: □ #",
+      "ダイヤに発注書を送る",
+      "来週:"
+    ]
+  },
+  {
+    "name": "jessie-納期なしで登録",
+    "cmd": "python scripts/tasks.py --store {fx}/tasks.json add 見積依頼 --due なし",
+    "exit": 0,
+    "contains": [
+      "[納期なし]"
+    ]
+  },
+  {
+    "name": "jessie-キーワードで完了",
+    "cmd": "python scripts/tasks.py --store {fx}/tasks.json done 発注書",
+    "exit": 0,
+    "contains": [
+      "完了: ✓ #"
+    ]
+  },
+  {
+    "name": "jessie-一覧に完了は出ない",
+    "cmd": "python scripts/tasks.py --store {fx}/tasks.json list",
+    "exit": 0,
+    "contains": [
+      "見積依頼"
+    ],
+    "not_contains": [
+      "ダイヤに発注書を送る"
+    ]
+  },
+  {
+    "name": "jessie-該当なしは1",
+    "cmd": "python scripts/tasks.py --store {fx}/tasks.json done 存在しない",
+    "exit": 1,
+    "contains": [
+      "該当なし"
+    ]
+  }
 ]
