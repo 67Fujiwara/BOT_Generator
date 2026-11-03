@@ -30,7 +30,11 @@ aside.left{background:var(--side);border-right:1px solid var(--line);display:fle
 .group-name{font-size:12px;color:var(--muted);padding:14px 8px 4px}
 .item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;cursor:pointer;border:0;background:none;width:100%;text-align:left;font:inherit;color:var(--ink)}
 .item:hover{background:var(--bubble)} .item[aria-current="true"]{background:var(--bubble);outline:1px solid var(--line)}
-.avatar{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+/* ブロブ型アイコン: 形と色はボットごとに固定（id から生成）、選択中だけ形がヌルっと変わる */
+.avatar{width:34px;height:34px;flex:none;display:inline-block;vertical-align:middle;overflow:visible}
+.avatar .eyes{transform-box:fill-box;transform-origin:center}
+.avatar.live .eyes{animation:blink 4.5s ease-in-out infinite}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.12)}}
 .item .t{min-width:0;flex:1} .item .n{font-weight:500;line-height:1.3} .item .p{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .item .p.live{color:var(--accent)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none;display:none}
@@ -109,7 +113,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 .set-status{font-size:13px;margin-top:10px;min-height:1.6em;white-space:pre-wrap}
 .set-status.ok{color:#2E8B57} .set-status.ng{color:var(--err)}
 @media (max-width:980px){ body{grid-template-columns:230px 1fr} aside.right{display:none} }
-@media (prefers-reduced-motion:reduce){ .item.busy .dot{animation:none} }
+@media (prefers-reduced-motion:reduce){ .item.busy .dot{animation:none} .avatar.live .eyes{animation:none} }
 </style>
 </head>
 <body>
@@ -167,11 +171,32 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <script>
 const $=s=>document.querySelector(s);
 const log=$('#log'), input=$('#input'), sendBtn=$('#send'), attachedEl=$('#attached'), statusEl=$('#status'), toollog=$('#toollog');
-const AUTO={id:'_auto',nick:'おまかせ',desc:'内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#6D6E71',preview:''};
+const AUTO={id:'_auto',nick:'おまかせ',desc:'内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#A8B3C0',preview:''};
 let bots=[], current=AUTO, pending=[], busy=new Set(), resetNext=false;
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const md=s=>window.marked?marked.parse(s,{breaks:true}):esc(s).replace(/\n/g,'<br>');
-const avatar=(b,cls='avatar')=>`<span class="${cls}" style="background:${b.color}">${esc(b.nick[0]||'?')}</span>`;
+/* id からブロブの形を決める。点の数 3〜7（3 は丸い三角、4 は丸い四角…）を Catmull-Rom で滑らかに閉じる */
+const hash=id=>{ let h=2166136261; for(const ch of String(id)){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; };
+const rng=seed=>{ let t=seed>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; };
+function blobPts(seed,frame){
+  const r=rng(seed), n=3+Math.floor(r()*5), base=[];
+  for(let i=0;i<n;i++) base.push([(i/n)*Math.PI*2+(r()-.5)*.6, 37+(r()-.5)*12]);
+  const w=rng(seed*7+frame*131);
+  return base.map(([a,rad])=>{ const da=frame?(w()-.5)*.25:0, dr=frame?(w()-.5)*12:0; return [50+Math.cos(a+da)*(rad+dr), 50+Math.sin(a+da)*(rad+dr)]; });
+}
+function toPath(p){
+  const n=p.length, f=v=>v.toFixed(1); let d=`M${f(p[0][0])} ${f(p[0][1])}`;
+  for(let i=0;i<n;i++){ const p0=p[(i-1+n)%n],p1=p[i],p2=p[(i+1)%n],p3=p[(i+2)%n];
+    d+=`C${f(p1[0]+(p2[0]-p0[0])/6)} ${f(p1[1]+(p2[1]-p0[1])/6)} ${f(p2[0]-(p3[0]-p1[0])/6)} ${f(p2[1]-(p3[1]-p1[1])/6)} ${f(p2[0])} ${f(p2[1])}`; }
+  return d+'Z';
+}
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const avatar=(b,cls='avatar',id='',live=false)=>{
+  const seed=hash(b.id), d0=toPath(blobPts(seed,0));
+  const anim=live&&!reduced?`<animate attributeName="d" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.33;.66;1" keySplines=".45 0 .55 1;.45 0 .55 1;.45 0 .55 1" values="${d0};${toPath(blobPts(seed,1))};${toPath(blobPts(seed,2))};${d0}"/>`:'';
+  const ey=43+(seed%3)*3, dx=10+(seed>>3)%3;
+  return `<svg class="${cls}${live?' live':''}"${id?` id="${id}"`:''} viewBox="0 0 100 100" role="img" aria-label="${esc(b.nick)}"><path fill="${esc(b.color)}" d="${d0}">${anim}</path><g class="eyes"><circle cx="${50-dx}" cy="${ey}" r="7.5" fill="#fff"/><circle cx="${50+dx}" cy="${ey}" r="7.5" fill="#fff"/><circle cx="${51-dx}" cy="${ey+.6}" r="4" fill="#1A2230"/><circle cx="${51+dx}" cy="${ey+.6}" r="4" fill="#1A2230"/></g></svg>`;
+};
 
 async function loadBots(){
   bots=await (await fetch('/bots')).json();
@@ -185,7 +210,7 @@ function renderList(){
     const el=document.createElement('button'); el.className='item'+(busy.has(b.id)?' busy':''); el.type='button';
     el.setAttribute('aria-current', String(current.id===b.id));
     const live=b.status; 
-    el.innerHTML=`${avatar(b)}<span class="t"><div class="n">${esc(b.nick)}</div><div class="p ${live?'live':''}">${esc(live||b.preview||b.desc)}</div></span><span class="dot"></span>`;
+    el.innerHTML=`${avatar(b,'avatar','',current.id===b.id)}<span class="t"><div class="n">${esc(b.nick)}</div><div class="p ${live?'live':''}">${esc(live||b.preview||b.desc)}</div></span><span class="dot"></span>`;
     el.onclick=()=>select(b); return el;
   };
   wrap.appendChild(mk(AUTO));
@@ -196,7 +221,7 @@ function renderList(){
 }
 async function select(b){
   current=b; renderList(); renderRight();
-  $('#topAvatar').outerHTML=avatar(b).replace('class="avatar"','class="avatar" id="topAvatar"'); $('#topName').textContent=b.nick;
+  $('#topAvatar').outerHTML=avatar(b,'avatar','topAvatar'); $('#topName').textContent=b.nick;
   log.innerHTML=''; statusEl.innerHTML='';
   const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>Enter で送信、Shift+Enter で改行</div>`;
@@ -205,7 +230,7 @@ async function select(b){
 }
 function renderRight(){
   const b=current;
-  $('#rAvatar').outerHTML=avatar(b).replace('class="avatar"','class="avatar" id="rAvatar"'); $('#rName').textContent=b.nick;
+  $('#rAvatar').outerHTML=avatar(b,'avatar','rAvatar'); $('#rName').textContent=b.nick;
   $('#pane-detail').innerHTML=`<dl>
     <dt>役割</dt><dd>${esc(b.desc)}</dd>
     <dt>グループ</dt><dd>${esc(b.group||'—')}</dd>

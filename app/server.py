@@ -31,7 +31,7 @@ HISTORY = ROOT / "app" / "history.json"   # ボットごとの会話ログ（左
 CONFIG = ROOT / "app" / "config.json"     # 画面から保存した設定（API キーなど。git 対象外）
 _sessions: dict[str, str] = {}             # bot id → SDK session id（会話の続きを保つ）
 _history: dict[str, list] = json.loads(HISTORY.read_text(encoding="utf-8")) if HISTORY.exists() else {}
-PALETTE = ["#E8503A", "#2E8B57", "#1F5FBF", "#D98A1F", "#7B4FB3", "#17A2A8", "#B33A6E", "#6D6E71"]
+PALETTE = ["#F28B82", "#7BCF9C", "#8AB4F8", "#FDD663", "#C58AF9", "#78D9EC", "#FF8BCB", "#F6A96B"]  # 柔らかめ
 
 
 def _save_history():
