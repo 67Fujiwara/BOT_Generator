@@ -10,6 +10,7 @@ model: sonnet
 group: 文章
 color: "#A5734B"
 shape: slinky
+record: true
 samples:
   - 議事録の見本
 ---

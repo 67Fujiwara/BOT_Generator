@@ -113,7 +113,7 @@ def _front(path: Path) -> dict:
     txt = path.read_text(encoding="utf-8")
     head = txt.split("---")[1] if txt.startswith("---") else ""
     out = {}
-    for key in ("name", "description", "model", "group", "color", "shape"):
+    for key in ("name", "description", "model", "group", "color", "shape", "record"):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
@@ -167,7 +167,7 @@ def list_bots() -> list[dict]:
             "group": f.get("group", "未分類"), "model": f.get("model", "既定"),
             "tools": f["tools"], "samples": f["samples"],
             "color": f.get("color", PALETTE[sum(bid.encode()) % len(PALETTE)]),   # 既定色は id から決める（ファイルが増えても変わらない）
-            "shape": f.get("shape", ""),
+            "shape": f.get("shape", ""), "record": f.get("record", "").lower() in ("true", "yes", "1"),
             "preview": (last.get("text") or "")[:60].replace("\n", " "),
             "status": "",
         })

@@ -67,6 +67,7 @@ bot-team/
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , POST /chat (SSE) , /settings , /settings/test , /shutdown
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
+                          フロントマター record: true のボット（スリンキー）では 🎙 でマイク録音（MediaRecorder、webm/opus 32kbps）→ 停止で添付
   inbox/                  ドロップしたファイルの保存先（git 対象外）
   samples/<bot>/<ラベル>/  ボットごとの参考サンプル（git 対象外。右パネルから追加・削除。フロントマター samples: で枠を定義）
   tests/                  run_tests.py（バズが回す）/ cases.json（8 ケース: potato 4, rex 3, slinky 1）/ make_fixtures.py（入力を生成、fixtures/ は git 対象外）
