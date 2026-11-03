@@ -100,7 +100,7 @@ def _front(path: Path) -> dict:
     for key in ("name", "description", "model", "group", "color"):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
-            out[key] = m.group(1).strip()
+            out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
     for key in ("tools", "samples"):
         m = re.search(rf"^{key}:\s*\[(.*)\]", head, re.M) or re.search(rf"^{key}:\s*\n((?:\s+-\s*.+\n?)+)", head, re.M)
         out[key] = [t.strip(" -") for t in re.split(r"[,\n]", m.group(1)) if t.strip(" -")] if m else []
