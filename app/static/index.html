@@ -222,12 +222,13 @@ const avatar=(b,cls='avatar',id='',live=false)=>{
     <path class="body" fill="url(#${g})" d="${d0}">${anim}</path>
     <g class="eyes">${eye(50-dx)}${eye(50+dx)}<g class="pupils">${pupil(50-dx)}${pupil(50+dx)}</g></g></svg>`;
 };
-/* 瞳がマウスを追う: 各アイコンの中心からマウスへの向きに、最大 3.2 単位だけ瞳をずらす */
+/* 瞳がマウスを追う（選択中のアイコンだけ）: アイコン中心からマウスへの向きに、最大 3.2 単位だけ瞳をずらす */
 let mouse=null, eyeRaf=0;
 function trackEyes(){
   eyeRaf=0;
   document.querySelectorAll('svg.avatar').forEach(sv=>{
     const g=sv.querySelector('.pupils'); if(!g) return;
+    if(!sv.classList.contains('live')){ g.style.transform=''; return; }
     if(!mouse){ g.style.transform=''; return; }
     const r=sv.getBoundingClientRect(); if(!r.width) return;
     const cx=r.left+r.width/2, cy=r.top+r.height*.45;
