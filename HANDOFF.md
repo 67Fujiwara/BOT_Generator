@@ -59,7 +59,8 @@ bot-team/
   inbox/                  ドロップしたファイルの保存先（git 対象外）
   tests/                  まだ空。サンプル入力→期待レポートを置く予定
   requirements.txt        pandas openpyxl pdfplumber fastapi uvicorn python-multipart claude-agent-sdk
-  run.bat / run.sh        窓なしで裏起動（pythonw）＋ブラウザを開く。起動済みなら開くだけ（server.py がポートを見て判断）
+  setup.bat / setup.ps1   新しい PC の初期設定を一発で: Python 3.10+ 検出（なければ winget）→ .venv → pip → 自動起動登録 → 起動。再実行しても安全
+  run.bat / run.sh        窓なしで裏起動（.venv があればその pythonw、なければ PATH の pythonw）＋ブラウザを開く。起動済みなら開くだけ
   autostart_on/off.bat    Windows ログオン時の自動起動を登録 / 解除（スタートアップにショートカット）
                           終了は画面左上 ⏻ → POST /shutdown。pythonw のときの出力は app/server.log（git 対象外）
 ```
@@ -88,6 +89,7 @@ bot-team/
 
 ## 次にやること（優先順）
 
+0. 別 PC で `setup.bat` を一度通す（2026-11-03 作成、Windows 実機では未実行。PowerShell が止まったらその画面の文面を貼る）。
 1. ~~SDK 疎通~~ 2026-11-03 に Windows 実機で画面→SDK→Claude Code まで到達を確認（認証エラーが Claude Code から返った）。残りは API キーを ⚙ で保存して返事が来ることの確認。
    Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ポークに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
 2. 本物の見積PDF・発注書Excelでポテトを走らせ、`--show-columns` で列判定を確認し、`COL_GUESS` に候補を足す。

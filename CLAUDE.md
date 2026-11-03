@@ -9,6 +9,8 @@
 - 比較はスクリプト（決定的）に任せ、Claude は列の判定と結果の要約だけを担当する。
 
 ## セットアップ
+新しい PC では `setup.bat` をダブルクリックするだけ（Python 3.10+ の検出→なければ winget で導入→`.venv` 作成→依存インストール→ログオン時自動起動の登録→起動）。あとはブラウザで ⚙ から API キーを保存する。
+以下は手動でやる場合:
 Python 3.10 以上が必要（claude-agent-sdk が 3.10 未満に対応していない。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を入れて `pyenv local 3.12.x` でこのフォルダだけ切り替える）。
 pip install -r requirements.txt
 API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` に保存、git 対象外）。環境変数 `ANTHROPIC_API_KEY` や Claude Code のログインでも可。画面で保存したキーが最優先。
