@@ -78,6 +78,17 @@ def _front(path: Path) -> dict:
     return out
 
 
+def _agent_def(bot_id: str) -> dict | None:
+    """ボット定義（フロントマター＋本文）。本文はそのままシステムプロンプトに使う。"""
+    for p in AGENTS_DIR.glob("*.md"):
+        f = _front(p)
+        if f.get("name", p.stem) == bot_id:
+            txt = p.read_text(encoding="utf-8")
+            body = txt.split("---", 2)[2].strip() if txt.startswith("---") else txt
+            return {**f, "body": body}
+    return None
+
+
 def list_bots() -> list[dict]:
     """.claude/agents/*.md のフロントマターから一覧を作る。"""
     bots = []
@@ -188,9 +199,12 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                 shutil.copyfileobj(f.file, out)
             saved.append(dst)
 
+    agent = _agent_def(bot_id) if bot_id != "_auto" else None   # 指定ボットは親を挟まず直接呼ぶ
     prompt = message.strip()
-    if nick:
+    if nick and not agent:
         prompt = f"{nick}、{prompt}" if prompt else f"{nick}、お願いします"
+    elif not prompt:
+        prompt = "お願いします"
     if saved:
         prompt += "\n\nファイル:\n" + "\n".join(f"- {p.relative_to(ROOT)}" for p in saved)
 
@@ -204,14 +218,33 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
             from claude_agent_sdk import ClaudeAgentOptions, query
             from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 
-            opts = ClaudeAgentOptions(
-                cwd=str(ROOT),
-                setting_sources=["project"],            # .claude/agents と CLAUDE.md を読む
-                allowed_tools=["Read", "Glob", "Grep", "Bash", "Agent", "Task"],
-                permission_mode="acceptEdits",
-                resume=_sessions.get(bot_id),
-                env=_sdk_env(),
-            )
+            if agent:
+                # 直接呼び: ボット定義の本文をシステムプロンプトに、ツールとモデルも定義どおり。
+                # ツールなしのボットは Claude Code の既定プロンプトも外して文章だけ返す。
+                tools = agent["tools"]
+                sys_prompt = ({"type": "preset", "preset": "claude_code", "append": agent["body"]}
+                              if tools else agent["body"])
+                opts = ClaudeAgentOptions(
+                    cwd=str(ROOT),
+                    system_prompt=sys_prompt,
+                    model=agent.get("model") or None,
+                    tools=tools,
+                    allowed_tools=tools,
+                    setting_sources=[],                  # CLAUDE.md の「必ず委譲」を読ませない
+                    permission_mode="acceptEdits",
+                    resume=_sessions.get(bot_id),
+                    env=_sdk_env(),
+                )
+            else:
+                # おまかせ: 親エージェントが CLAUDE.md を見て適したボットに委譲する
+                opts = ClaudeAgentOptions(
+                    cwd=str(ROOT),
+                    setting_sources=["project"],            # .claude/agents と CLAUDE.md を読む
+                    allowed_tools=["Read", "Glob", "Grep", "Bash", "Agent", "Task"],
+                    permission_mode="acceptEdits",
+                    resume=_sessions.get(bot_id),
+                    env=_sdk_env(),
+                )
             t0 = time.time()
             async for msg in query(prompt=prompt, options=opts):
                 if isinstance(msg, AssistantMessage):
@@ -227,12 +260,13 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                                 label = (b.input.get("command") or "")[:90]
                             yield _sse({"type": "tool", "text": label})
                 elif isinstance(msg, ResultMessage):
+                    # 委譲ありの経路ではサブエージェント分も流れてくるので、最後の1件だけ採用する
                     sid = getattr(msg, "session_id", None)
                     if sid:
                         _sessions[bot_id] = sid
-                    _history[bot_id].append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
-                    _save_history()
-                    yield _sse({"type": "done", "sec": round(time.time() - t0, 1)})
+            _history[bot_id].append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
+            _save_history()
+            yield _sse({"type": "done", "sec": round(time.time() - t0, 1)})
         except ImportError:
             yield _sse({"type": "error", "text": "claude-agent-sdk が入っていません: pip install claude-agent-sdk"})
         except Exception as e:  # noqa: BLE001

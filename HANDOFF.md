@@ -24,7 +24,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 | 呼び名 | id | 役割 | ツール | グループ |
 |---|---|---|---|---|
 | ポテト | potato | 2つのリスト（BOM / 購買リスト / 正式見積PDF / 発注書Excel）を突き合わせ、漏れ・余分・数量不一致・単価不一致・金額合計差を報告 | Read, Bash, Glob | 購買・リスト |
-| ポーク | pork | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可） | なし | 文章 |
+| ポーク | pork | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可）。model: haiku | なし | 文章 |
 
 ポテトのルール: 入力ファイルは編集しない。表記ゆれ（全角半角・大文字小文字・ハイフン・スペース・スラッシュ）はスクリプトが吸収するが、それ以上の「似た型式」は一致扱いにせず「要確認」として両方を並べる。
 ポークのルール: 意味・数値・型式を変えない。主語が抜けて意味が取れない箇所は `【確認: 〜？】` を入れて返す。整えた文だけ返す。
@@ -46,6 +46,8 @@ bot-team/
                           終了コード: 差分なし 0 / あり 1
   app/
     server.py             FastAPI。ブラウザからの文＋ファイルを Claude Agent SDK に渡す
+                          ボット指定時は親を挟まず直接呼ぶ（定義本文=システムプロンプト、tools/model も定義どおり、setting_sources=[]）
+                          「おまかせ」だけ親エージェント経由で委譲（CLAUDE.md を読む）
                           GET/POST /settings で API キーを app/config.json に保存、POST /settings/test で疎通確認
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , POST /chat (SSE)
@@ -67,6 +69,16 @@ bot-team/
 - 認証: 画面左上 ⚙ の設定ダイアログで API キーを保存（`app/config.json`、git 対象外、`ClaudeAgentOptions(env=...)` で渡すので環境変数より優先）、または `ANTHROPIC_API_KEY`、または Claude Code ログイン。ダイアログに「接続テスト」あり（haiku で1往復）。
 - 2026-11-03 追記: `claude-agent-sdk` 0.2.177 のソースと突き合わせ、`server.py` が使う名前（`query`, `ClaudeAgentOptions`, `AssistantMessage`, `ResultMessage`, `TextBlock`, `ToolUseBlock`）と引数（`cwd`, `setting_sources=["project"]`, `allowed_tools`, `permission_mode="acceptEdits"`, `resume`）、`ResultMessage.session_id` はすべて存在することを確認済み。wheel に Claude Code CLI 2.1.317 が同梱されているので、別途 `npm install -g @anthropic-ai/claude-code` は不要。実際に API を呼ぶところまでは未実行。
 - 同日、`scripts/extract_items.py` と `compare_lists.py` を合成データ（Excel の BOM と CSV の発注書、列名違い・全角型式・小計行入り）で再確認し、漏れ/余分/数量不一致/単価不一致/金額合計差がすべて検出された。
+
+## 応答速度（2026-11-03 実測、同じ1文をポークに）
+
+| 経路 | 時間 | 備考 |
+|---|---|---|
+| おまかせ → 親が委譲 → ポーク → 親が言い直し | 13〜30 s | LLM 3回直列。親が前置きや件名を勝手に足す |
+| ポーク直接（haiku） | 3.8〜3.9 s | 整えた文だけ返る |
+| ポーク直接（sonnet） | 2.5 s | 1回のみの計測。haiku と大差なし |
+
+直接経路の内訳はおおむね Claude Code 起動 1〜2 s ＋ LLM 1回。さらに縮めるなら (1) `include_partial_messages=True` で文字を流しながら表示（体感）、(2) `ClaudeSDKClient` でプロセスを常駐させて起動分を削る、の順。
 
 ## 次にやること（優先順）
 
