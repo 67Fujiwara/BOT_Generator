@@ -93,8 +93,8 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .right .hero{text-align:center;margin-bottom:14px}
 .right .hero .avatar{width:64px;height:64px;font-size:26px;margin:0 auto 10px}
 .right .hero .n{font-weight:700;font-size:16px}
-.tabs{display:flex;justify-content:center;gap:4px;margin-bottom:14px}
-.tabs button{border:0;background:none;color:var(--muted);font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;cursor:pointer}
+.tabs{display:flex;justify-content:center;gap:2px;margin-bottom:14px}
+.tabs button{border:0;background:none;color:var(--muted);font:inherit;font-size:12.5px;padding:5px 9px;border-radius:999px;cursor:pointer;white-space:nowrap}
 .tabs button[aria-selected="true"]{background:var(--bubble);color:var(--ink)}
 .pane{font-size:13.5px} .pane dt{color:var(--muted);font-size:12px;margin-top:12px} .pane dd{margin:2px 0 0}
 .pane .mono{font:12px var(--mono);word-break:break-all}
@@ -107,14 +107,14 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .task-add input{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink)}
 .task-add .row2{display:flex;gap:6px} .task-add .row2 input{flex:1} .task-add button{border:1px solid var(--line);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
 .tasklist{list-style:none;padding:0;margin:0}
-.tasklist li{display:grid;grid-template-columns:22px 1fr auto;gap:6px 8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
+.tasklist li{display:grid;grid-template-columns:22px 1fr auto auto;gap:4px 6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
 .tasklist input[type=checkbox]{width:16px;height:16px;margin-top:3px;cursor:pointer}
 .tasklist .tt{font-size:13.5px;line-height:1.5;word-break:break-word} .tasklist li.done .tt{color:var(--muted);text-decoration:line-through}
 .tasklist .due{font-size:12px;color:var(--muted);margin-top:2px}
 .tasklist .st{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--bubble);color:var(--muted);white-space:nowrap}
 .tasklist .st.期限切れ,.tasklist .st.すぐ{background:var(--err);color:#fff} .tasklist .st.今日まで{background:var(--caution);color:#1A2230} .tasklist .st.期間内{background:var(--accent);color:#fff}
-.tasklist .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;grid-column:3} .tasklist .x:hover{color:var(--err)}
-.tasklist .note{grid-column:2/4;font-size:12px;color:var(--muted)}
+.tasklist .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 2px} .tasklist .x:hover{color:var(--err)}
+.tasklist .note{grid-column:2/5;font-size:12px;color:var(--muted)}
 .task-foot{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:12px;color:var(--muted)} .task-foot button{border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 /* 催促ポップアップ */
 .toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(380px,92vw)}
@@ -192,7 +192,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
   <div class="hero"><span class="avatar" id="rAvatar">?</span><div class="n" id="rName">ウッディ</div></div>
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-pane="detail">詳細</button>
-    <button role="tab" aria-selected="false" data-pane="log">作業ログ</button>
+    <button role="tab" aria-selected="false" data-pane="log">ログ</button>
     <button role="tab" aria-selected="false" data-pane="files">ファイル</button>
     <button role="tab" aria-selected="false" data-pane="tasks">タスク<span class="badge" id="taskBadge"></span></button>
   </div>
@@ -401,8 +401,19 @@ function toast(t){
   box.appendChild(el);
   if('Notification' in window&&Notification.permission==='granted'&&document.hidden) new Notification('ジェシー: '+t.title,{body:why+'（'+dueText(t)+'）'});
 }
+function toastMany(list){
+  const box=$('#toasts'); if(box.querySelector('.toast[data-id="many"]')) return;
+  const el=document.createElement('div'); el.className='toast'; el.dataset.id='many';
+  el.innerHTML=`<div class="tl">気になるタスクが ${list.length} 件あります</div><div>${list.map(t=>`・${esc(t.title)}（${esc(t.status)}）`).join('<br>')}</div><div class="tb"><button class="p">タスクを見る</button><button>あとで（2時間）</button><button>閉じる</button></div>`;
+  const [bv,bs,bc]=el.querySelectorAll('button');
+  bv.onclick=()=>{ document.querySelector('.tabs button[data-pane="tasks"]').click(); el.remove(); };
+  bs.onclick=async()=>{ for(const t of list) await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
+  bc.onclick=()=>el.remove();
+  box.appendChild(el);
+  if('Notification' in window&&Notification.permission==='granted'&&document.hidden) new Notification(`ジェシー: 気になるタスクが ${list.length} 件`,{body:list.map(t=>t.title).join(' / ')});
+}
 async function checkReminders(){
-  const now=new Date(), H=3600e3;
+  const now=new Date(), H=3600e3, due=[];
   for(const t of tasksCache){
     if(t.done||!t.due_end) continue;
     if(t.snooze_until&&new Date(t.snooze_until)>now) continue;
@@ -411,8 +422,11 @@ async function checkReminders(){
     if(t.status==='期限切れ'||t.status==='今日まで') fire=since>2*H;
     else if(t.status==='すぐ') fire=since>2*H&&(now-new Date(t.created))>4*H;
     else if(t.status==='期間内') fire=!last||last.toDateString()!==now.toDateString();
-    if(fire){ toast(t); await fetch(`/tasks/${t.id}/reminded`,{method:'POST'}); t.last_reminded=now.toISOString(); }
+    if(fire) due.push(t);
   }
+  if(!due.length) return;
+  if(due.length===1) toast(due[0]); else toastMany(due);
+  for(const t of due){ await fetch(`/tasks/${t.id}/reminded`,{method:'POST'}); t.last_reminded=now.toISOString(); }
 }
 loadTasks(); setInterval(loadTasks,60000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadTasks(); });
