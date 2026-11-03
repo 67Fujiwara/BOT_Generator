@@ -1,7 +1,7 @@
 """会議音声 → 文字起こし → フィラー（えー・あの・まあ 等）除去 → 整った本文を標準出力＋ファイルに出す。
 
 使い方:
-  python scripts/transcribe.py <音声ファイル> [--engine openai|whisper] [--model 名前] [--out <出力先.txt>]
+  python scripts/transcribe.py <音声ファイル> [--engine openai|whisper] [--model 名前] [--out <出力先.txt>] [--glossary "案件名,人名,用語"]
   python scripts/transcribe.py <既存の文字起こし.txt> --clean-only      文字起こし済みテキストの整形だけ
 エンジン:
   openai  … OpenAI 音声認識 API（既定 gpt-4o-transcribe）。環境変数 OPENAI_API_KEY（画面 ⚙ の「文字起こし API キー」）が必要。
@@ -46,6 +46,91 @@ def clean(text: str) -> str:
     return "\n".join(ln.strip() for ln in t.split("\n")).strip()
 
 
+# ---- 区切り送信（ライブ録音）用: 用語プロンプト・幻聴判定 ----------------------------------
+PROMPT_CHARS = 360   # Whisper 系の initial_prompt が効くのはおよそ 224 トークンまで
+HALLUCINATION = [
+    re.compile(p) for p in (
+        r"ご視聴ありがとうございました", r"チャンネル登録", r"高評価", r"字幕(は|を)?", r"次回(の動画)?も", r"最後まで(ご覧|見て)",
+        r"(?i)thanks? for watching", r"(?i)subtitles? by", r"(?i)like and subscribe", r"(?i)\b[a-z0-9-]+\.(com|org|net)\b",
+        r"^[\s。、.,!?！？…♪♫-]*$",
+    )
+]
+
+
+def build_prompt(glossary: str, prev: str) -> str:
+    """用語（案件名・人名・社内用語）を先に、直前の区切りの末尾を後ろに。"""
+    g = "、".join(t.strip() for t in re.split(r"[,、\n]", glossary or "") if t.strip())
+    head = f"会議の文字起こし。用語: {g}。" if g else "会議の文字起こし。"
+    tail = (prev or "").strip()[-max(0, PROMPT_CHARS - len(head)):]
+    return (head + tail)[:PROMPT_CHARS]
+
+
+def looks_hallucinated(text: str) -> bool:
+    t = text.strip()
+    if not t:
+        return True
+    if any(r.search(t) for r in HALLUCINATION):
+        return True
+    parts = [x.strip() for x in re.split(r"[。.!?！？\n]+", t) if x.strip()]
+    return len(parts) >= 4 and len(set(parts)) == 1     # 「はい。はい。はい。はい。」
+
+
+def low_confidence(segments: list[dict]) -> bool:
+    if not segments:
+        return False
+    ns = sum(s.get("no_speech_prob", 0) or 0 for s in segments) / len(segments)
+    lp = sum(s.get("avg_logprob", 0) or 0 for s in segments) / len(segments)
+    return ns > 0.6 or lp < -1.0
+
+
+def transcribe_chunk(path: Path, engine: str, model: str | None, prompt: str, start_sec: float = 0.0) -> dict:
+    """1 区切りを文字にして {text, segments, dropped} を返す。segments の時刻は会議開始からの秒。"""
+    if engine == "whisper":
+        text, segs = _whisper(path, model or "large-v3", prompt)
+    else:
+        text, segs = _openai(path, model or os.environ.get("SLINKY_OPENAI_MODEL", "gpt-4o-transcribe"), prompt)
+    text = text.strip()
+    if not text or looks_hallucinated(text) or low_confidence(segs):
+        return {"text": "", "segments": [], "dropped": text or "(empty)"}
+    return {"text": text, "segments": [{"start": start_sec + s["start"], "end": start_sec + s["end"], "text": s["text"]}
+                                       for s in segs if s.get("text", "").strip()] or
+            [{"start": start_sec, "end": start_sec, "text": text}]}
+
+
+def _openai(path: Path, model: str, prompt: str | None) -> tuple[str, list[dict]]:
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY がありません。画面左上の ⚙ で「文字起こし API キー」を保存してください。")
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        raise RuntimeError("openai パッケージがありません: pip install openai") from e
+    client = OpenAI(api_key=key)
+    kw = {"model": model, "language": "ja", "response_format": "text"}
+    if prompt:
+        kw["prompt"] = prompt
+    with path.open("rb") as f:
+        r = client.audio.transcriptions.create(file=f, **kw)
+    return (r if isinstance(r, str) else getattr(r, "text", str(r))), []
+
+
+_WHISPER = {}
+
+
+def _whisper(path: Path, model: str, prompt: str | None) -> tuple[str, list[dict]]:
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as e:
+        raise RuntimeError("faster-whisper がありません: pip install faster-whisper（ローカル実行。初回はモデルを数GB落とします）") from e
+    if model not in _WHISPER:
+        _WHISPER[model] = WhisperModel(model, device="auto", compute_type="auto")
+    segments, _ = _WHISPER[model].transcribe(str(path), language="ja", vad_filter=True, beam_size=5,
+                                             initial_prompt=prompt or None, condition_on_previous_text=False)
+    segs = [{"start": s.start, "end": s.end, "text": s.text.strip(), "no_speech_prob": s.no_speech_prob, "avg_logprob": s.avg_logprob}
+            for s in segments]
+    return "\n".join(s["text"] for s in segs), segs
+
+
 def split_audio(path: Path) -> list[Path]:
     """25MB 超なら ffmpeg で 10 分ごとに分割。"""
     if path.stat().st_size <= MAX_BYTES:
@@ -62,32 +147,22 @@ def split_audio(path: Path) -> list[Path]:
     return parts
 
 
-def transcribe_openai(path: Path, model: str) -> str:
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key:
-        sys.exit("ERROR: OPENAI_API_KEY がありません。画面左上の ⚙ で「文字起こし API キー」を保存してください。")
-    try:
-        from openai import OpenAI
-    except ImportError:
-        sys.exit("ERROR: openai パッケージがありません: pip install openai")
-    client = OpenAI(api_key=key)
-    texts = []
-    for i, part in enumerate(split_audio(path), 1):
-        with part.open("rb") as f:
-            r = client.audio.transcriptions.create(model=model, file=f, language="ja", response_format="text")
-        texts.append(r if isinstance(r, str) else getattr(r, "text", str(r)))
-        print(f"[{i}] {part.name} 完了", file=sys.stderr)
-    return "\n".join(t.strip() for t in texts)
-
-
-def transcribe_whisper(path: Path, model: str) -> str:
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError:
-        sys.exit("ERROR: faster-whisper がありません: pip install faster-whisper（ローカル実行。初回はモデルを数GB落とします）")
-    m = WhisperModel(model, device="auto", compute_type="auto")
-    segments, _ = m.transcribe(str(path), language="ja", vad_filter=True)
-    return "\n".join(s.text.strip() for s in segments)
+def transcribe_file(path: Path, engine: str, model: str | None, glossary: str) -> str:
+    """ファイル 1 本を文字にする。25MB 超は分割し、前の部分の末尾を次のプロンプトに渡す。"""
+    texts, prev = [], ""
+    parts = split_audio(path) if engine == "openai" else [path]
+    for i, part in enumerate(parts, 1):
+        try:
+            fn = _whisper if engine == "whisper" else _openai
+            text, _ = fn(part, model or ("large-v3" if engine == "whisper" else os.environ.get("SLINKY_OPENAI_MODEL", "gpt-4o-transcribe")),
+                         build_prompt(glossary, prev))
+        except RuntimeError as e:
+            sys.exit(f"ERROR: {e}")
+        texts.append(text.strip())
+        prev = text[-300:]
+        if len(parts) > 1:
+            print(f"[{i}/{len(parts)}] {part.name} 完了", file=sys.stderr)
+    return "\n".join(texts)
 
 
 def main():
@@ -97,6 +172,7 @@ def main():
     ap.add_argument("--model", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--clean-only", action="store_true")
+    ap.add_argument("--glossary", default=os.environ.get("SLINKY_GLOSSARY", ""), help="案件名・人名・社内用語（カンマ区切り）")
     a = ap.parse_args()
     src = Path(a.src)
     if not src.exists():
@@ -104,10 +180,8 @@ def main():
 
     if a.clean_only or src.suffix.lower() in TEXT_EXT:
         raw = src.read_text(encoding="utf-8", errors="replace")
-    elif a.engine == "openai":
-        raw = transcribe_openai(src, a.model or os.environ.get("SLINKY_OPENAI_MODEL", "gpt-4o-transcribe"))
     else:
-        raw = transcribe_whisper(src, a.model or "large-v3")
+        raw = transcribe_file(src, a.engine, a.model, a.glossary)
 
     text = clean(raw)
     out = Path(a.out) if a.out else src.with_name(src.stem + "_文字起こし.txt")

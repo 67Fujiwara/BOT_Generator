@@ -55,6 +55,7 @@ bot-team/
                           商社列は自動判定（数値主体で数量などでない列）、--vendors 表示名=列名 で手動指定、--show-columns で確認
                           終了コード: 全行転記 0 / 要確認あり 1 / 失敗 2
     transcribe.py         スリンキー用。音声→文字起こし（openai: gpt-4o-transcribe / whisper: faster-whisper large-v3）→ clean() でフィラー・言い直し除去
+                          build_prompt(用語, 直前末尾) / looks_hallucinated / low_confidence / transcribe_chunk を server.py の /transcribe/chunk も使う
                           .txt を渡せば整形だけ。25MB 超は ffmpeg で 10 分分割。OPENAI_API_KEY は ⚙ の「文字起こし API キー」→ _sdk_env() で渡す
     check_lists.py        上2つをまとめて実行（抽出×2→比較→レポート標準出力）。ポテトはこれを1回の Bash で呼ぶ
                           終了コード: 差分なし 0 / あり 1 / 抽出失敗 2（--cols-base / --cols-target で列指定）
@@ -64,10 +65,15 @@ bot-team/
                           「ウッディ」（おまかせ役、id は _auto のまま）だけ親エージェント経由で委譲（CLAUDE.md を読む）。顔だけのシルエット shape: woody
                           GET/POST /settings で API キーを app/config.json に保存、POST /settings/test で疎通確認
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
-                          エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , POST /chat (SSE) , /settings , /settings/test , /shutdown
+                          エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , /samples/{bot} , /version ,
+                          POST /chat (SSE) , /settings , /settings/test , /samples/{bot} , /transcribe/chunk , /transcribe/finish , /shutdown , DELETE /samples/{bot}
+                          config.json: api_key, openai_api_key, transcribe_engine(auto|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
-                          フロントマター record: true のボット（スリンキー）では 🎙 でマイク録音（MediaRecorder、webm/opus 32kbps）→ 停止で添付
+                          フロントマター record: true のボット（スリンキー）では 🎙 でライブ録音: マイク＋任意でタブ音声を AudioContext で合成、
+                          chunk_sec（既定 45 秒）ごとに stop→start で完結した webm を /transcribe/chunk に順番に送り（prev=直前の末尾、glossary=用語）、
+                          文字をチャットに逐次表示。停止で /transcribe/finish に全文保存 → txt を添付してスリンキーへ自動送信
+                          （SYNAPSE の client-recorder.ts / worker-transcribe.ts を移植。外部サーバーモードはその Worker にそのまま転送できる）
   inbox/                  ドロップしたファイルの保存先（git 対象外）
   samples/<bot>/<ラベル>/  ボットごとの参考サンプル（git 対象外。右パネルから追加・削除。フロントマター samples: で枠を定義）
   tests/                  run_tests.py（バズが回す）/ cases.json（8 ケース: potato 4, rex 3, slinky 1）/ make_fixtures.py（入力を生成、fixtures/ は git 対象外）
@@ -114,6 +120,7 @@ bot-team/
    Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ハムに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
 2. 本物の見積PDF・発注書Excelでポテトを走らせ、`--show-columns` で列判定を確認し、`COL_GUESS` に候補を足す。
 3. ~~`tests/` にサンプル入力と期待レポートを置き、検証役ボット（verifier）を追加して全テストを回させる。~~ 2026-11-03 完了（バズ）。ボットやスクリプトを足したら `tests/cases.json` にケースを足す。
+- **スリンキー ライブ録音: 実機・実エンジンで未検証**（この環境はエンジン応答をスタブにしてブラウザの流れだけ確認）。初回は ⚙ でエンジンと用語を入れ、短い会議で試す。タブ音声は Chrome/Edge で「タブの音声を共有」を有効にすること。
 - **スリンキー: 実際の録音で未検証**（この環境に OpenAI キーなし）。整形と鍵なし時のエラー文だけ確認済み。最初の1回は短い録音で `python scripts/transcribe.py <音声>` を手で回し、文字起こし精度とフィラー除去のやり過ぎ（`FILLERS_BOUNDED` の「はい」「ね」など）を見る。エンジン候補は中立ベンチマークが無いので実音声で比較して決める。
 4. ボット階層の本体（lead / worker / verifier）に着手。最初は「リード1・ワーカー2・検証1」の小さい構成から。
 5. 将来: ブラウザを使うボットを足すときは右パネルの作業ログをスクリーンショット表示に戻す。長時間処理はクラウドセッションに逃がす。

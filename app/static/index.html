@@ -86,6 +86,7 @@ textarea{flex:1;resize:none;border:0;outline:0;background:transparent;color:var(
 .send:disabled{opacity:.45;cursor:default}
 .rec{font-size:16px} .rec.on{background:var(--err);color:#fff;animation:pulse 1.2s infinite}
 .rec-time{font:12px var(--mono);color:var(--err);align-self:center;min-width:52px;text-align:center} .rec-time:empty{display:none}
+.live-box{max-width:min(820px,92%);width:100%} .live-text{white-space:pre-wrap;font-size:13.5px;line-height:1.7} .live-text:empty::before{content:"（まだ文字はありません）";color:var(--muted)}
 
 /* ── 右: ボット詳細 ── */
 aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:auto;padding:28px 18px}
@@ -193,6 +194,24 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <button type="button" id="openaiSave" style="font:inherit;font-size:13px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)">保存</button>
     <button type="button" id="openaiClear" style="font:inherit;font-size:13px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)">削除</button>
   </div>
+  <details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">ライブ録音・文字起こしの設定（スリンキー）</summary>
+    <label for="trEngine">文字起こしエンジン</label>
+    <select id="trEngine" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
+      <option value="auto">自動（外部サーバー → OpenAI → ローカル Whisper の順で使えるもの）</option>
+      <option value="openai">OpenAI（上の文字起こしキー）</option>
+      <option value="whisper">ローカル Whisper（faster-whisper、鍵不要）</option>
+      <option value="remote">外部サーバー（SYNAPSE の /api/minutes/transcribe など）</option>
+    </select>
+    <label for="trUrl">外部サーバーの URL</label>
+    <input id="trUrl" type="text" placeholder="https://…/api/minutes/transcribe" autocomplete="off" spellcheck="false">
+    <label for="trToken">外部サーバーのトークン <span id="trTokenCurrent" style="margin-left:8px"></span></label>
+    <input id="trToken" type="password" placeholder="Bearer に入れる値（空で保存すると変更なし）" autocomplete="off">
+    <label for="trGlossary">用語（案件名・人名・製品名・社内用語。カンマ区切り。固有名詞の誤りが減ります）</label>
+    <textarea id="trGlossary" rows="2" placeholder="例: SYNAPSE, 藤原, 制御盤, FAT, 納期, KV-8000" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px;resize:vertical"></textarea>
+    <label for="trChunk">区切りの長さ（秒、20〜90。既定 45）</label>
+    <input id="trChunk" type="number" min="20" max="90" value="45" style="width:120px">
+    <div class="btns" style="margin-top:10px"><span class="spacer"></span><button type="button" id="trSave">文字起こし設定を保存</button></div>
+  </details>
   <div class="set-status" id="setStatus"></div>
   <div class="btns">
     <button type="button" id="setTest">接続テスト</button>
@@ -299,32 +318,76 @@ async function select(b){
   $('#rec').hidden=!b.record;
   input.focus();
 }
-/* ── マイク録音: webm/opus 32kbps（1時間 ≈ 15MB）。停止すると添付に入るので、そのまま送れる ── */
-let recorder=null, recChunks=[], recT0=0, recTimer=0;
-function fmtT(ms){ const s=Math.floor(ms/1000); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+/* ── ライブ録音（スリンキー）: マイク（＋任意でオンライン会議のタブ音声）を 1 本に合成し、
+   区切りごとに stop→start で完結した webm を作って /transcribe/chunk に順番に送る。
+   文字は届き次第チャットに出し、停止すると全文を文字起こし txt として添付してスリンキーに送る。 ── */
+let live=null;
+function fmtT(sec){ const s=Math.floor(sec); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 async function toggleRec(){
-  const btn=$('#rec');
-  if(recorder&&recorder.state!=='inactive'){ recorder.stop(); return; }
-  let stream;
-  try{ stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
+  if(live){ await stopLive(); return; }
+  const b=current;
+  const includeTab = confirm('オンライン会議（Teams / Zoom のブラウザタブ）の音声も一緒に録りますか？\nOK → 次に出る画面共有の選択で会議のタブを選び「タブの音声を共有」を有効にしてください。\nキャンセル → マイクだけ録ります。');
+  let mic, tab=null, ctx;
+  try{ mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
   catch(e){ alert('マイクを使えませんでした。ブラウザのマイク許可を確認してください。\n'+e.message); return; }
-  const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(m=>MediaRecorder.isTypeSupported(m))||'';
-  recorder=new MediaRecorder(stream, mime?{mimeType:mime,audioBitsPerSecond:32000}:{audioBitsPerSecond:32000});
-  recChunks=[]; recorder.ondataavailable=e=>{ if(e.data.size) recChunks.push(e.data); };
-  recorder.onstop=()=>{
-    stream.getTracks().forEach(t=>t.stop()); clearInterval(recTimer); btn.classList.remove('on'); $('#recTime').textContent='';
-    const ext=(recorder.mimeType||'').includes('mp4')?'m4a':'webm';
-    const d=new Date(), pad=n=>String(n).padStart(2,'0');
-    const name=`録音_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.${ext}`;
-    addFiles([new File(recChunks,name,{type:recorder.mimeType||'audio/webm'})]);
-    if(!input.value.trim()) input.value='この録音を議事録にして';
-    input.focus();
+  ctx=new AudioContext(); const dest=ctx.createMediaStreamDestination(); ctx.createMediaStreamSource(mic).connect(dest);
+  if(includeTab){
+    try{ tab=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true}); tab.getVideoTracks().forEach(t=>t.stop());
+      if(tab.getAudioTracks().length) ctx.createMediaStreamSource(tab).connect(dest); else alert('タブの音声が取れませんでした（「タブの音声を共有」がオフ）。マイクだけで続けます。'); }
+    catch(e){ tab=null; }
+  }
+  const mime=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'].find(m=>MediaRecorder.isTypeSupported(m));
+  const d=new Date(), pad=n=>String(n).padStart(2,'0');
+  const meeting=`録音_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const chunkMs=((settingsCache.chunk_sec)||45)*1000, glossary=settingsCache.glossary||'';
+  const st={bot:b,meeting,mic,tab,ctx,dest,mime,t0:Date.now(),seq:0,prev:'',stopping:false,rec:null,timer:0,queue:Promise.resolve(),lines:[],errors:0};
+  live=st;
+  // 画面: 会話欄にライブ本文の枠
+  log.querySelector('.empty')?.remove();
+  st.el=append('msg bot-msg live-box',`<div class="meta" style="padding:0 0 6px">● 録音中 — 文字は区切り（${chunkMs/1000}秒）ごとに出ます</div><div class="live-text"></div>`);
+  const upload=async(blob,seq,startSec)=>{
+    const fd=new FormData(); fd.append('audio',blob,`chunk-${seq}.webm`); fd.append('seq',seq); fd.append('startSec',startSec);
+    fd.append('language','ja'); fd.append('glossary',glossary); fd.append('prev',st.prev); fd.append('meeting',meeting);
+    const res=await fetch('/transcribe/chunk',{method:'POST',body:fd});
+    if(!res.ok) throw new Error(`transcribe ${res.status}`);
+    const r=await res.json();
+    if(r.error){ st.errors++; setStatus(b,'文字起こしエラー: '+r.error); if(st.errors===1) append('error',esc(r.error)); return; }
+    if(r.text){ st.prev=r.text.slice(-300); st.lines.push(`[${fmtT(startSec)}] ${r.text}`); const t=st.el.querySelector('.live-text'); t.textContent=st.lines.join('\n'); log.scrollTop=log.scrollHeight; }
   };
-  recorder.start(1000); recT0=Date.now(); btn.classList.add('on');
-  recTimer=setInterval(()=>{ $('#recTime').textContent='● '+fmtT(Date.now()-recT0); },500);
+  const begin=()=>{
+    const r=new MediaRecorder(dest.stream, mime?{mimeType:mime,audioBitsPerSecond:32000}:undefined);
+    const chunks=[]; const startSec=(Date.now()-st.t0)/1000; const mySeq=st.seq++;
+    r.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+    r.stopped=new Promise(res=>{ r.onstop=()=>{ const blob=new Blob(chunks,{type:r.mimeType||'audio/webm'});
+      if(blob.size>=2000) st.queue=st.queue.then(()=>upload(blob,mySeq,startSec)).catch(e=>{ st.errors++; setStatus(b,'送信失敗: '+e.message); });
+      res(); }; });
+    r.start(); st.rec=r; clearTimeout(st.timer); st.timer=setTimeout(rotate,chunkMs);
+  };
+  /* 区切りを閉じて（onstop を待ってから）次を始める。停止時はその promise で最後の区切りが待ち行列に入ったことを確かめる */
+  const rotate=()=>{ const cur=st.rec; if(!cur) return Promise.resolve(); st.rec=null; cur.stop(); if(!st.stopping) begin(); return cur.stopped; };
+  st.rotate=rotate; begin();
+  $('#rec').classList.add('on'); input.placeholder='録音中… 🎙 をもう一度押すと停止して議事録を作ります';
+  st.clock=setInterval(()=>{ $('#recTime').textContent='● '+fmtT((Date.now()-st.t0)/1000); },500);
+}
+async function stopLive(){
+  const st=live; if(!st) return; live=null;
+  st.stopping=true; clearTimeout(st.timer); const lastStopped=st.rotate();
+  $('#rec').classList.remove('on'); clearInterval(st.clock); $('#recTime').textContent='';
+  setStatus(st.bot,'最後の区切りを文字にしています'); await lastStopped; await st.queue;
+  st.mic.getTracks().forEach(t=>t.stop()); st.tab?.getTracks().forEach(t=>t.stop()); try{ await st.ctx.close(); }catch(e){}
+  applySendKey(); setStatus(st.bot,'');
+  st.el.querySelector('.meta').textContent=`■ 録音終了（${fmtT((Date.now()-st.t0)/1000)}）`;
+  const text=st.lines.join('\n');
+  if(!text.trim()){ append('error','文字が取れませんでした。マイクや文字起こしの設定（⚙）を確認してください。'); return; }
+  const fd=new FormData(); fd.append('meeting',st.meeting); fd.append('text',text);
+  try{ await fetch('/transcribe/finish',{method:'POST',body:fd}); }catch(e){}
+  // 全文を txt として添付し、そのままスリンキーに送る（transcribe.py は .txt なら整形だけ行う）
+  addFiles([new File([text],`${st.meeting}_文字起こし.txt`,{type:'text/plain'})]);
+  if(!input.value.trim()) input.value='この文字起こしを議事録にして';
+  if(current.id===st.bot.id) send();
 }
 $('#rec').onclick=toggleRec;
-window.addEventListener('beforeunload',e=>{ if(recorder&&recorder.state==='recording'){ e.preventDefault(); e.returnValue=''; } });
+window.addEventListener('beforeunload',e=>{ if(live){ e.preventDefault(); e.returnValue=''; } });
 function renderRight(){
   const b=current;
   $('#rAvatar').outerHTML=avatar(b,'avatar','rAvatar'); $('#rName').textContent=b.nick;
@@ -439,8 +502,22 @@ async function loadSettings(){
   $('#setClear').disabled=!st.api_key_set;
   $('#openaiCurrent').textContent = st.openai_key_set ? `（保存済み ${st.openai_key_hint}）` : '（未設定）';
   $('#openaiClear').disabled=!st.openai_key_set;
+  $('#trEngine').value=st.transcribe_engine||'auto'; $('#trUrl').value=st.remote_transcribe_url||'';
+  $('#trTokenCurrent').textContent=st.remote_token_set?'（保存済み）':'（未設定）';
+  $('#trGlossary').value=st.glossary||''; $('#trChunk').value=st.chunk_sec||45;
+  settingsCache=st;
   return st;
 }
+let settingsCache={};
+$('#trSave').onclick=async()=>{
+  const fd=new FormData();
+  fd.append('transcribe_engine',$('#trEngine').value); fd.append('remote_transcribe_url',$('#trUrl').value);
+  if($('#trToken').value.trim()) fd.append('remote_transcribe_token',$('#trToken').value.trim());
+  fd.append('glossary',$('#trGlossary').value); fd.append('chunk_sec',$('#trChunk').value);
+  const r=await (await fetch('/settings',{method:'POST',body:fd})).json();
+  if(!r.ok){ showSet(r.error,'ng'); return; }
+  $('#trToken').value=''; await loadSettings(); showSet('文字起こし設定を保存しました。','ok');
+};
 $('#openaiSave').onclick=async()=>{
   const fd=new FormData(); fd.append('openai_api_key',$('#openaiKey').value);
   const r=await (await fetch('/settings',{method:'POST',body:fd})).json();

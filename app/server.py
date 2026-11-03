@@ -7,6 +7,7 @@
        環境変数 ANTHROPIC_API_KEY か、Claude Code にログイン済みであること
 """
 import asyncio
+import functools
 import json
 import os
 import re
@@ -93,6 +94,10 @@ def _sdk_env() -> dict[str, str]:
     env = {}
     if cfg.get("openai_api_key"):                 # スリンキーの文字起こし用（scripts/transcribe.py が読む）
         env["OPENAI_API_KEY"] = cfg["openai_api_key"]
+    if cfg.get("glossary"):
+        env["SLINKY_GLOSSARY"] = cfg["glossary"]
+    if cfg.get("transcribe_engine") in ("openai", "whisper"):
+        env["SLINKY_ENGINE"] = cfg["transcribe_engine"]
     key = cfg.get("api_key", "")
     if key:
         CLAUDE_HOME.mkdir(parents=True, exist_ok=True)
@@ -224,6 +229,69 @@ def delete_sample(bot: str, path: str):
     return {"ok": True, **get_samples(bot)}
 
 
+# ---- ライブ録音: ブラウザが 45 秒ごとに区切りを送る → 文字＋時刻を返す ------------------------
+def _engine_for_chunks(cfg: dict) -> str:
+    e = cfg.get("transcribe_engine", "auto")
+    if e != "auto":
+        return e
+    if cfg.get("remote_transcribe_url"):
+        return "remote"
+    return "openai" if cfg.get("openai_api_key") else "whisper"
+
+
+@app.post("/transcribe/chunk")
+async def transcribe_chunk(audio: UploadFile = File(...), seq: int = Form(0), startSec: float = Form(0.0),
+                           language: str = Form("ja"), glossary: str = Form(""), prev: str = Form(""),
+                           meeting: str = Form("")):
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "scripts"))
+    import transcribe as tr   # scripts/transcribe.py
+
+    cfg = _load_config()
+    d = INBOX / _safe_name(meeting or datetime.now().strftime("%Y%m%d-%H%M%S"))
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"chunk-{seq:03d}.webm"
+    with path.open("wb") as out:
+        shutil.copyfileobj(audio.file, out)
+    if path.stat().st_size < 2000:
+        return {"seq": seq, "startSec": startSec, "text": "", "segments": [], "dropped": "(empty)"}
+
+    engine = _engine_for_chunks(cfg)
+    base = {"seq": seq, "startSec": startSec}
+    try:
+        if engine == "remote":                      # SYNAPSE などの /api/minutes/transcribe と同じ形で転送する
+            import httpx
+            url = cfg.get("remote_transcribe_url", "")
+            if not url:
+                return {**base, "error": "外部サーバーの URL が未設定です（⚙ の文字起こし設定）"}
+            headers = {"Authorization": f"Bearer {cfg['remote_transcribe_token']}"} if cfg.get("remote_transcribe_token") else {}
+            form = {"seq": str(seq), "startSec": str(startSec), "language": language, "glossary": glossary or cfg.get("glossary", ""), "prev": prev}
+            async with httpx.AsyncClient(timeout=120) as cl:
+                with path.open("rb") as f:
+                    r = await cl.post(url, data=form, files={"audio": (path.name, f, "audio/webm")}, headers=headers)
+            if r.status_code != 200:
+                return {**base, "error": f"外部サーバー {r.status_code}: {r.text[:200]}"}
+            return r.json()
+        prompt = tr.build_prompt(glossary or cfg.get("glossary", ""), prev)
+        if engine == "openai" and cfg.get("openai_api_key"):
+            os.environ["OPENAI_API_KEY"] = cfg["openai_api_key"]
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, functools.partial(tr.transcribe_chunk, path, engine, None, prompt, startSec))
+        return {**base, **res}
+    except Exception as e:  # noqa: BLE001
+        return {**base, "error": f"{type(e).__name__}: {e}"}
+
+
+@app.post("/transcribe/finish")
+def transcribe_finish(meeting: str = Form(""), text: str = Form("")):
+    """ライブ録音の全文（時刻付き）を inbox/<meeting>/文字起こし_raw.txt に保存してパスを返す。"""
+    d = INBOX / _safe_name(meeting or datetime.now().strftime("%Y%m%d-%H%M%S"))
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / "文字起こし_raw.txt"
+    p.write_text(text, encoding="utf-8")
+    return {"ok": True, "path": str(p.relative_to(ROOT))}
+
+
 @app.get("/version")
 def version():
     return {"stamp": CODE_STAMP}
@@ -241,20 +309,47 @@ def get_settings():
     cfg = _load_config()
     key = cfg.get("api_key", "")
     okey = cfg.get("openai_api_key", "")
+    rtok = cfg.get("remote_transcribe_token", "")
     return {
         "api_key_set": bool(key),
         "api_key_hint": f"…{key[-4:]}" if key else "",
         "openai_key_set": bool(okey),
         "openai_key_hint": f"…{okey[-4:]}" if okey else "",
+        "transcribe_engine": cfg.get("transcribe_engine", "auto"),
+        "remote_transcribe_url": cfg.get("remote_transcribe_url", ""),
+        "remote_token_set": bool(rtok),
+        "glossary": cfg.get("glossary", ""),
+        "chunk_sec": int(cfg.get("chunk_sec", 45)),
         "env_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "config_file": str(CONFIG.relative_to(ROOT)),
     }
 
 
 @app.post("/settings")
-def set_settings(api_key: str = Form(None), openai_api_key: str = Form(None)):
+def set_settings(api_key: str = Form(None), openai_api_key: str = Form(None),
+                 transcribe_engine: str = Form(None), remote_transcribe_url: str = Form(None),
+                 remote_transcribe_token: str = Form(None), glossary: str = Form(None), chunk_sec: str = Form(None)):
     """送られてきた項目だけ更新する。空文字は削除。"""
     cfg = _load_config()
+    if transcribe_engine is not None:
+        if transcribe_engine not in ("auto", "openai", "whisper", "remote"):
+            return {"ok": False, "error": "エンジンの指定が不正です"}
+        cfg["transcribe_engine"] = transcribe_engine
+    if remote_transcribe_url is not None:
+        url = remote_transcribe_url.strip()
+        if url and not url.startswith("https://"):
+            return {"ok": False, "error": "外部サーバーの URL は https:// で始めてください"}
+        cfg["remote_transcribe_url"] = url
+    if remote_transcribe_token is not None:
+        tok = remote_transcribe_token.strip()
+        if tok:
+            cfg["remote_transcribe_token"] = tok
+        elif remote_transcribe_token == "":
+            cfg.pop("remote_transcribe_token", None)
+    if glossary is not None:
+        cfg["glossary"] = glossary.strip()
+    if chunk_sec is not None and chunk_sec.strip().isdigit():
+        cfg["chunk_sec"] = max(20, min(90, int(chunk_sec)))
     if api_key is not None:
         key = api_key.strip().strip('"').strip("'")
         if key and not key.startswith("sk-ant-"):
