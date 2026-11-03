@@ -74,7 +74,7 @@ bot-team/
 ```
 
 `.claude/agents/*.md` のフロントマターに `group:` と `color:` を足すと左一覧のグループ分けと色に反映される（Claude Code 自体はこの2項目を無視する想定）。
-アイコンはボット id から生成するブロブ型 SVG（点の数 3〜7 を滑らかに閉じた形＋目）。形は id で固定、色は `color:` か既定パレット。選択中のボットだけ SMIL でパスがモーフィングし、まばたきする（prefers-reduced-motion では止まる）。
+アイコンはボット id から生成するブロブ型 SVG（点の数 3〜7 を滑らかに閉じた形＋目）。形は id で固定、色は `color:` か既定パレット。左上光源の放射状グラデーション＋drop-shadow で立体風。瞳は全アイコンがマウスを追う（mousemove → requestAnimationFrame で `.pupils` を最大 3.2 単位ずらす）。選択中のボットだけ SMIL でパスがモーフィングし、まばたきする（prefers-reduced-motion では止まる）。
 
 ## 動作確認の状況
 
