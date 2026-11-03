@@ -60,7 +60,8 @@ bot-team/
   tests/                  まだ空。サンプル入力→期待レポートを置く予定
   requirements.txt        pandas openpyxl pdfplumber fastapi uvicorn python-multipart claude-agent-sdk
   setup.bat / setup.ps1   新しい PC の初期設定を一発で: Python 3.10+ 検出（なければ winget）→ .venv → pip → 自動起動登録 → 起動。再実行しても安全
-  run.bat / run.sh        窓なしで裏起動（.venv があればその pythonw、なければ PATH の pythonw）＋ブラウザを開く。起動済みなら開くだけ
+  run.bat / run.sh        窓なしで裏起動（.venv があればその pythonw、なければ PATH の pythonw）＋ブラウザを開く
+                          起動済みなら GET /version で印を比べ、同じなら開くだけ、古ければ POST /shutdown で止めて入れ替える（git pull 後も run.bat だけでよい）
   autostart_on/off.bat    Windows ログオン時の自動起動を登録 / 解除（スタートアップにショートカット）
                           終了は画面左上 ⏻ → POST /shutdown。pythonw のときの出力は app/server.log（git 対象外）
 ```

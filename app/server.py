@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent      # bot-team/
 INBOX = ROOT / "inbox"
 AGENTS_DIR = ROOT / ".claude" / "agents"
 HOST, PORT = "127.0.0.1", 8765
+CODE_STAMP = f"{os.path.getmtime(__file__):.0f}-{os.path.getsize(__file__)}"   # 起動時のコードの印。古い常駐を見分ける
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
@@ -133,6 +134,11 @@ def inbox():
     """右パネル「コンピューター」用: 最近置かれたファイル。"""
     items = sorted(INBOX.rglob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
     return [{"path": str(p.relative_to(ROOT)), "at": p.stat().st_mtime} for p in items if p.is_file() and p.name != ".gitkeep"][:30]
+
+
+@app.get("/version")
+def version():
+    return {"stamp": CODE_STAMP}
 
 
 @app.post("/shutdown")
@@ -296,6 +302,29 @@ def _port_in_use() -> bool:
         return sk.connect_ex((HOST, PORT)) == 0
 
 
+def _replace_stale_server(url: str) -> bool:
+    """動いているサーバーが古いコードなら止める。止められたら True。"""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{url}/version", timeout=2) as r:
+            if json.loads(r.read()).get("stamp") == CODE_STAMP:
+                return False                       # 同じコードが動いている
+    except Exception:  # noqa: BLE001  /version が無い＝古い
+        pass
+    print("bot-team: old server is running, asking it to stop")
+    try:
+        urllib.request.urlopen(urllib.request.Request(f"{url}/shutdown", method="POST"), timeout=2).read()
+    except Exception:  # noqa: BLE001  /shutdown も無いほど古い
+        print("bot-team: the old server cannot be stopped from here; close its console window and run run.bat again")
+        return False
+    for _ in range(40):                            # 最大 8 秒待つ
+        time.sleep(0.2)
+        if not _port_in_use():
+            return True
+    return False
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -312,7 +341,7 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-    if _port_in_use():                      # すでに動いていればブラウザを開くだけ
+    if _port_in_use() and not _replace_stale_server(url):   # 同じコードが動いていればブラウザを開くだけ
         print(f"bot-team: already running at {url}")
         if args.open:
             webbrowser.open(url)
