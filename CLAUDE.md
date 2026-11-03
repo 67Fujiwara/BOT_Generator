@@ -13,7 +13,7 @@
 以下は手動でやる場合:
 Python 3.10 以上が必要（claude-agent-sdk が 3.10 未満に対応していない。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を入れて `pyenv local 3.12.x` でこのフォルダだけ切り替える）。
 pip install -r requirements.txt
-API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` に保存、git 対象外）。環境変数 `ANTHROPIC_API_KEY` や Claude Code のログインでも可。画面で保存したキーが最優先。
+API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` に保存、git 対象外）。環境変数 `ANTHROPIC_API_KEY` や Claude Code のログインでも可。画面で保存したキーが最優先で、その場合は Claude Code の設定を `app/claude_home/` に分離して Claude.ai のログイン情報を使わない。
 
 ## 足りない情報は先に聞く（全ボット共通。詳細は `.claude/bot_rules.md`）
 出力に必要な情報が本文・添付・サンプルから分からないときは、推測や【確認: 〜】のような穴埋めで出力を作らず、足りない項目だけを1回にまとめて短く聞いて止まる。答えが来たら本来の出力だけを返す。結果が変わらない些細な点は聞かずに決める。

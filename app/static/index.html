@@ -346,7 +346,7 @@ async function send(){
         if(ev.type==='text'){ if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
         else if(ev.type==='tool'){ setStatus(b,ev.text); toollog.textContent+=ev.text+'\n'; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`); }
-        else if(ev.type==='error'){ append('error',esc(ev.text)); if(/api key/i.test(ev.text)) openSettings('認証に失敗しました。API キーを設定してください。'); }
+        else if(ev.type==='error'){ append('error',esc(ev.text)); if(/api key|authenticat|oauth|not logged in/i.test(ev.text)) openSettings('認証に失敗しました。API キーを保存するか、claude で /login し直してください。'); }
       }
     }
   }catch(e){ append('error','サーバーに届きません。python app/server.py が動いているか確認してください。'); }

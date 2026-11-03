@@ -82,14 +82,25 @@ def _save_config(cfg: dict):
         pass
 
 
+CLAUDE_HOME = ROOT / "app" / "claude_home"   # キー使用時の Claude Code 設定置き場（~/.claude のログイン情報と切り離す。git 対象外）
+
+
 def _sdk_env() -> dict[str, str]:
-    """画面で保存した API キーがあれば、環境変数より優先して Claude Code に渡す。"""
+    """画面で保存した API キーがあれば、環境変数より優先して Claude Code に渡す。
+    そのときは CLAUDE_CONFIG_DIR をアプリ専用にして、~/.claude にある Claude.ai のログイン
+    （期限切れだと "OAuth session expired" になる）を Claude Code が見に行かないようにする。"""
     key = _load_config().get("api_key", "")
-    return {"ANTHROPIC_API_KEY": key} if key else {}
+    if not key:
+        return {}
+    CLAUDE_HOME.mkdir(parents=True, exist_ok=True)
+    return {"ANTHROPIC_API_KEY": key, "CLAUDE_CONFIG_DIR": str(CLAUDE_HOME)}
 
 
 def _auth_hint(text: str) -> str:
-    if "api key" in text.lower() or "authentication" in text.lower() or "not logged in" in text.lower():
+    low = text.lower()
+    if "oauth" in low or "authenticat" in low or "not logged in" in low:
+        return text + "\n→ Claude.ai のログインが切れています。左上の ⚙ で API キーを保存するか、コマンド窓で claude を起動して /login し直してください。"
+    if "api key" in low:
         return text + "\n→ 左上の ⚙ から API キーを設定してください。"
     return text
 

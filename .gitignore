@@ -10,3 +10,4 @@ app/server.log
 .python-version
 samples/*
 !samples/.gitkeep
+app/claude_home/
