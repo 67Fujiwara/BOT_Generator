@@ -46,6 +46,7 @@ bot-team/
                           終了コード: 差分なし 0 / あり 1
   app/
     server.py             FastAPI。ブラウザからの文＋ファイルを Claude Agent SDK に渡す
+                          GET/POST /settings で API キーを app/config.json に保存、POST /settings/test で疎通確認
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , POST /chat (SSE)
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
@@ -62,13 +63,14 @@ bot-team/
 
 - 確認済み: extract/compare スクリプト（Excel と罫線なしPDFのサンプルで差分検出OK）、サーバー起動、/bots、/history、/inbox、ファイル保存、SSE配信、UI。
 - **未確認: Claude Agent SDK への接続部分**（この作業環境に SDK がなかった）。`server.py` の `ClaudeAgentOptions(cwd, setting_sources=["project"], allowed_tools=[... "Agent","Task"], permission_mode="acceptEdits", resume=...)` と `AssistantMessage / TextBlock / ToolUseBlock / ResultMessage` のインポートは公式ドキュメントに合わせて書いたが、実行はしていない。最初の1回はここで止まる可能性が高い。
-- 認証は `ANTHROPIC_API_KEY` か Claude Code ログイン済みのどちらかで通る想定（未確認）。
+- 認証: 画面左上 ⚙ の設定ダイアログで API キーを保存（`app/config.json`、git 対象外、`ClaudeAgentOptions(env=...)` で渡すので環境変数より優先）、または `ANTHROPIC_API_KEY`、または Claude Code ログイン。ダイアログに「接続テスト」あり（haiku で1往復）。
 - 2026-11-03 追記: `claude-agent-sdk` 0.2.177 のソースと突き合わせ、`server.py` が使う名前（`query`, `ClaudeAgentOptions`, `AssistantMessage`, `ResultMessage`, `TextBlock`, `ToolUseBlock`）と引数（`cwd`, `setting_sources=["project"]`, `allowed_tools`, `permission_mode="acceptEdits"`, `resume`）、`ResultMessage.session_id` はすべて存在することを確認済み。wheel に Claude Code CLI 2.1.317 が同梱されているので、別途 `npm install -g @anthropic-ai/claude-code` は不要。実際に API を呼ぶところまでは未実行。
 - 同日、`scripts/extract_items.py` と `compare_lists.py` を合成データ（Excel の BOM と CSV の発注書、列名違い・全角型式・小計行入り）で再確認し、漏れ/余分/数量不一致/単価不一致/金額合計差がすべて検出された。
 
 ## 次にやること（優先順）
 
-1. Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ポークに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
+1. ~~SDK 疎通~~ 2026-11-03 に Windows 実機で画面→SDK→Claude Code まで到達を確認（認証エラーが Claude Code から返った）。残りは API キーを ⚙ で保存して返事が来ることの確認。
+   Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ポークに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
 2. 本物の見積PDF・発注書Excelでポテトを走らせ、`--show-columns` で列判定を確認し、`COL_GUESS` に候補を足す。
 3. `tests/` にサンプル入力と期待レポートを置き、検証役ボット（verifier）を追加して全テストを回させる。
 4. ボット階層の本体（lead / worker / verifier）に着手。最初は「リード1・ワーカー2・検証1」の小さい構成から。

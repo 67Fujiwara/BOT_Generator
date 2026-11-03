@@ -2,10 +2,12 @@
 
 起動:  python app/server.py   → http://127.0.0.1:8765
 依存:  pip install fastapi uvicorn python-multipart claude-agent-sdk
-認証:  ANTHROPIC_API_KEY か、Claude Code にログイン済みであること
+認証:  画面左上の ⚙ で API キーを保存（app/config.json）するか、
+       環境変数 ANTHROPIC_API_KEY か、Claude Code にログイン済みであること
 """
 import asyncio
 import json
+import os
 import re
 import shutil
 import sys
@@ -26,6 +28,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
 
 HISTORY = ROOT / "app" / "history.json"   # ボットごとの会話ログ（左の一覧のプレビュー用）
+CONFIG = ROOT / "app" / "config.json"     # 画面から保存した設定（API キーなど。git 対象外）
 _sessions: dict[str, str] = {}             # bot id → SDK session id（会話の続きを保つ）
 _history: dict[str, list] = json.loads(HISTORY.read_text(encoding="utf-8")) if HISTORY.exists() else {}
 PALETTE = ["#E8503A", "#2E8B57", "#1F5FBF", "#D98A1F", "#7B4FB3", "#17A2A8", "#B33A6E", "#6D6E71"]
@@ -33,6 +36,33 @@ PALETTE = ["#E8503A", "#2E8B57", "#1F5FBF", "#D98A1F", "#7B4FB3", "#17A2A8", "#B
 
 def _save_history():
     HISTORY.write_text(json.dumps(_history, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _load_config() -> dict:
+    try:
+        return json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_config(cfg: dict):
+    CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
+    try:
+        CONFIG.chmod(0o600)  # 自分だけ読める（Windows では無視される）
+    except OSError:
+        pass
+
+
+def _sdk_env() -> dict[str, str]:
+    """画面で保存した API キーがあれば、環境変数より優先して Claude Code に渡す。"""
+    key = _load_config().get("api_key", "")
+    return {"ANTHROPIC_API_KEY": key} if key else {}
+
+
+def _auth_hint(text: str) -> str:
+    if "api key" in text.lower() or "authentication" in text.lower() or "not logged in" in text.lower():
+        return text + "\n→ 左上の ⚙ から API キーを設定してください。"
+    return text
 
 
 def _front(path: Path) -> dict:
@@ -90,6 +120,52 @@ def inbox():
     return [{"path": str(p.relative_to(ROOT)), "at": p.stat().st_mtime} for p in items if p.is_file() and p.name != ".gitkeep"][:30]
 
 
+@app.get("/settings")
+def get_settings():
+    key = _load_config().get("api_key", "")
+    return {
+        "api_key_set": bool(key),
+        "api_key_hint": f"…{key[-4:]}" if key else "",
+        "env_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "config_file": str(CONFIG.relative_to(ROOT)),
+    }
+
+
+@app.post("/settings")
+def set_settings(api_key: str = Form("")):
+    key = api_key.strip().strip('"').strip("'")
+    cfg = _load_config()
+    if key:
+        if not key.startswith("sk-ant-"):
+            return {"ok": False, "error": "API キーは sk-ant- で始まります。コピーし直してください。"}
+        cfg["api_key"] = key
+    else:
+        cfg.pop("api_key", None)
+    _save_config(cfg)
+    return {"ok": True, **get_settings()}
+
+
+@app.post("/settings/test")
+async def test_settings():
+    """保存したキーで最小のやり取りを1回行い、通るか確かめる。"""
+    try:
+        from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+
+        opts = ClaudeAgentOptions(cwd=str(ROOT), env=_sdk_env(), max_turns=1, model="haiku",
+                                  allowed_tools=[], permission_mode="default")
+        t0 = time.time()
+        async for msg in query(prompt="「OK」とだけ返してください。", options=opts):
+            if isinstance(msg, ResultMessage):
+                if msg.is_error:
+                    return {"ok": False, "error": _auth_hint(msg.result or "エラー")}
+                return {"ok": True, "sec": round(time.time() - t0, 1), "reply": (msg.result or "").strip()[:40]}
+        return {"ok": False, "error": "応答がありませんでした"}
+    except ImportError:
+        return {"ok": False, "error": "claude-agent-sdk が入っていません: pip install claude-agent-sdk"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": _auth_hint(f"{type(e).__name__}: {e}")}
+
+
 @app.post("/chat")
 async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool = Form(False),
                files: list[UploadFile] = File(default=[])):
@@ -134,6 +210,7 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                 allowed_tools=["Read", "Glob", "Grep", "Bash", "Agent", "Task"],
                 permission_mode="acceptEdits",
                 resume=_sessions.get(bot_id),
+                env=_sdk_env(),
             )
             t0 = time.time()
             async for msg in query(prompt=prompt, options=opts):
@@ -159,7 +236,7 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
         except ImportError:
             yield _sse({"type": "error", "text": "claude-agent-sdk が入っていません: pip install claude-agent-sdk"})
         except Exception as e:  # noqa: BLE001
-            yield _sse({"type": "error", "text": f"{type(e).__name__}: {e}"})
+            yield _sse({"type": "error", "text": _auth_hint(f"{type(e).__name__}: {e}")})
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

@@ -4,3 +4,4 @@ __pycache__/
 *.normalized.csv
 report.md
 app/history.json
+app/config.json

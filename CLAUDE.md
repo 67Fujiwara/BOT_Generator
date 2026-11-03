@@ -11,6 +11,7 @@
 ## セットアップ
 Python 3.10 以上が必要（claude-agent-sdk が 3.10 未満に対応していない。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を入れて `pyenv local 3.12.x` でこのフォルダだけ切り替える）。
 pip install -r requirements.txt
+API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` に保存、git 対象外）。環境変数 `ANTHROPIC_API_KEY` や Claude Code のログインでも可。画面で保存したキーが最優先。
 
 ## 表記ゆれの扱い
 全角/半角・大文字小文字・ハイフン・スペース・スラッシュは同一視する（KV-8000 = kv8000）。

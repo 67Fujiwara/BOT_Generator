@@ -94,6 +94,20 @@ body.drag::after{content:"ここに置くと添付されます";position:fixed;i
   background:repeating-linear-gradient(45deg,var(--caution) 0 18px,var(--ink) 18px 36px) border-box;
   -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:var(--ink)}
+/* ── 設定ダイアログ ── */
+dialog.settings{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:22px 24px;width:min(460px,92vw);font:inherit}
+dialog.settings::backdrop{background:rgba(0,0,0,.35)}
+dialog.settings h2{font-size:16px;margin:0 0 6px}
+dialog.settings p{margin:6px 0;font-size:13px;color:var(--muted)}
+dialog.settings label{display:block;font-size:12px;color:var(--muted);margin-top:14px}
+dialog.settings input{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px var(--mono);background:var(--bg);color:var(--ink);margin-top:4px}
+dialog.settings .btns{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+dialog.settings .btns .spacer{flex:1}
+dialog.settings button{font:inherit;font-size:13px;border-radius:8px;padding:7px 14px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)}
+dialog.settings button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+dialog.settings button:disabled{opacity:.5;cursor:default}
+.set-status{font-size:13px;margin-top:10px;min-height:1.6em;white-space:pre-wrap}
+.set-status.ok{color:#2E8B57} .set-status.ng{color:var(--err)}
 @media (max-width:980px){ body{grid-template-columns:230px 1fr} aside.right{display:none} }
 @media (prefers-reduced-motion:reduce){ .item.busy .dot{animation:none} }
 </style>
@@ -101,7 +115,7 @@ body.drag::after{content:"ここに置くと添付されます";position:fixed;i
 <body>
 
 <aside class="left">
-  <div class="left-top"><h1>bot-team</h1><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
+  <div class="left-top"><h1>bot-team</h1><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
   <div class="left-top" style="padding-top:0"><input id="filter" placeholder="ボットを探す"></div>
   <div class="groups" id="groups"></div>
 </aside>
@@ -133,6 +147,22 @@ body.drag::after{content:"ここに置くと添付されます";position:fixed;i
   <div class="pane" id="pane-log" hidden><pre class="toollog" id="toollog">（まだ何もしていません）</pre></div>
   <div class="pane" id="pane-files" hidden><ul class="filelist" id="filelist"></ul></div>
 </aside>
+
+<dialog class="settings" id="settings">
+  <h2>設定</h2>
+  <p id="setCurrent">読み込み中…</p>
+  <label for="apiKey">Anthropic API キー</label>
+  <input id="apiKey" type="password" placeholder="sk-ant-api03-…" autocomplete="off" spellcheck="false">
+  <p>キーは <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a> の API Keys で作れます。保存先はこの PC の <span class="mono" id="setFile">app/config.json</span> で、git には入りません。</p>
+  <div class="set-status" id="setStatus"></div>
+  <div class="btns">
+    <button type="button" id="setTest">接続テスト</button>
+    <button type="button" id="setClear">キーを削除</button>
+    <span class="spacer"></span>
+    <button type="button" id="setClose">閉じる</button>
+    <button type="button" class="primary" id="setSave">保存</button>
+  </div>
+</dialog>
 
 <script>
 const $=s=>document.querySelector(s);
@@ -213,7 +243,7 @@ async function send(){
         if(ev.type==='text'){ if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
         else if(ev.type==='tool'){ setStatus(b,ev.text); toollog.textContent+=ev.text+'\n'; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`); }
-        else if(ev.type==='error'){ append('error',esc(ev.text)); }
+        else if(ev.type==='error'){ append('error',esc(ev.text)); if(/api key/i.test(ev.text)) openSettings('認証に失敗しました。API キーを設定してください。'); }
       }
     }
   }catch(e){ append('error','サーバーに届きません。python app/server.py が動いているか確認してください。'); }
@@ -229,6 +259,41 @@ $('#pick').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{addFiles(e.target.files);e.target.value='';};
 $('#newChat').onclick=()=>{ resetNext=true; log.innerHTML=''; append('meta','新しい会話（次の送信から前の文脈は引き継ぎません）'); };
 $('#newBot').onclick=()=>alert('.claude/agents/ に <name>.md を置いて、ページを再読み込みしてください。');
+
+/* ── 設定（API キー） ── */
+const dlg=$('#settings'), apiKey=$('#apiKey'), setStatusEl=$('#setStatus');
+function showSet(text,cls){ setStatusEl.textContent=text||''; setStatusEl.className='set-status '+(cls||''); }
+async function loadSettings(){
+  const st=await (await fetch('/settings')).json();
+  $('#setFile').textContent=st.config_file;
+  $('#setCurrent').textContent = st.api_key_set ? `現在: 画面で保存したキー（${st.api_key_hint}）を使用`
+    : st.env_key_set ? '現在: 環境変数 ANTHROPIC_API_KEY を使用（ここで保存するとそちらより優先）'
+    : '現在: 未設定（Claude Code のログインがあればそれを使用）';
+  $('#setClear').disabled=!st.api_key_set;
+  return st;
+}
+function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); dlg.showModal(); apiKey.focus(); }
+$('#settingsBtn').onclick=()=>openSettings();
+$('#setClose').onclick=()=>{ dlg.close(); try{localStorage.setItem('settingsSeen','1');}catch(e){} };
+$('#setSave').onclick=async()=>{
+  const fd=new FormData(); fd.append('api_key',apiKey.value);
+  const r=await (await fetch('/settings',{method:'POST',body:fd})).json();
+  if(!r.ok){ showSet(r.error,'ng'); return; }
+  apiKey.value=''; await loadSettings(); showSet('保存しました。「接続テスト」で確かめられます。','ok');
+};
+$('#setClear').onclick=async()=>{
+  const fd=new FormData(); fd.append('api_key','');
+  await fetch('/settings',{method:'POST',body:fd}); await loadSettings(); showSet('削除しました。','ok');
+};
+$('#setTest').onclick=async()=>{
+  const btn=$('#setTest'); btn.disabled=true; showSet('接続中…');
+  try{
+    const r=await (await fetch('/settings/test',{method:'POST'})).json();
+    showSet(r.ok?`接続できました（${r.sec}s）`:r.error, r.ok?'ok':'ng');
+  }catch(e){ showSet('サーバーに届きません。','ng'); }
+  btn.disabled=false;
+};
+loadSettings().then(st=>{ let seen=false; try{seen=!!localStorage.getItem('settingsSeen');}catch(e){} if(!st.api_key_set&&!st.env_key_set&&!seen) openSettings(); });
 document.querySelectorAll('.tabs button').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true');
   ['detail','log','files'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles();
