@@ -25,6 +25,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 | 呼び名 | id | 役割 | ツール | グループ |
 |---|---|---|---|---|
 | ポテト | potato | 2つのリスト（BOM / 購買リスト / 正式見積PDF / 発注書Excel）を突き合わせ、漏れ・余分・数量不一致・単価不一致・金額合計差を報告 | Read, Bash, Glob | 購買・リスト |
+| レックス | rex | 購買の相見積もりスコア(Excel)から商社ごとの金額を拾い、BOM(Excel)に転記した `<BOM名>_見積.xlsx` を作る。右端に商社ごとの単価・金額列。型式不一致は空欄＋要確認 | Read, Bash, Glob | 購買・リスト |
 | ポーク | pork | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可）。model: haiku | なし | 文章 |
 
 ポテトのルール: 入力ファイルは編集しない。表記ゆれ（全角半角・大文字小文字・ハイフン・スペース・スラッシュ）はスクリプトが吸収するが、それ以上の「似た型式」は一致扱いにせず「要確認」として両方を並べる。
@@ -45,6 +46,10 @@ bot-team/
                           型式列がなければ品名をキーにする
     compare_lists.py      標準CSV 2つを比較 → report.md（漏れ/余分/数量不一致/単価不一致/金額合計差）
                           終了コード: 差分なし 0 / あり 1
+    fill_prices.py        レックス用。BOM.xlsx＋スコア.xlsx → <BOM名>_見積.xlsx（openpyxl で BOM の書式を保ったまま右端に列追加）
+                          見出し行は先頭15行から型式らしい見出しを探す。スコアは2段見出し（上段に商社名）に対応
+                          商社列は自動判定（数値主体で数量などでない列）、--vendors 表示名=列名 で手動指定、--show-columns で確認
+                          終了コード: 全行転記 0 / 要確認あり 1 / 失敗 2
     check_lists.py        上2つをまとめて実行（抽出×2→比較→レポート標準出力）。ポテトはこれを1回の Bash で呼ぶ
                           終了コード: 差分なし 0 / あり 1 / 抽出失敗 2（--cols-base / --cols-target で列指定）
   app/
@@ -57,6 +62,7 @@ bot-team/
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。Enter送信、Shift+Enter改行
   inbox/                  ドロップしたファイルの保存先（git 対象外）
+  samples/<bot>/<ラベル>/  ボットごとの参考サンプル（git 対象外。右パネルから追加・削除。フロントマター samples: で枠を定義）
   tests/                  まだ空。サンプル入力→期待レポートを置く予定
   requirements.txt        pandas openpyxl pdfplumber fastapi uvicorn python-multipart claude-agent-sdk
   setup.bat / setup.ps1   新しい PC の初期設定を一発で: Python 3.10+ 検出（なければ winget）→ .venv → pip → 自動起動登録 → 起動。再実行しても安全
@@ -85,11 +91,14 @@ bot-team/
 | おまかせ → 親が委譲 → ポーク → 親が言い直し | 13〜30 s | LLM 3回直列。親が前置きや件名を勝手に足す |
 | ポーク直接（haiku） | 3.8〜3.9 s | 整えた文だけ返る |
 | ポーク直接（sonnet） | 2.5 s | 1回のみの計測。haiku と大差なし |
+| レックス直接（sonnet） | 10.8 s | 合成 BOM＋スコアで Bash 1回（fill_prices.py）。このクラウド環境での計測 |
 | ポテト直接（sonnet） | 未計測 | 2026-11-03 に Bash 往復を 3〜4 回 → 1 回（check_lists.py）に削減。実ファイルで計測して埋める |
 
 直接経路の内訳はおおむね Claude Code 起動 1〜2 s ＋ LLM 1回。さらに縮めるなら (1) `include_partial_messages=True` で文字を流しながら表示（体感）、(2) `ClaudeSDKClient` でプロセスを常駐させて起動分を削る、の順。
 
 ## 次にやること（優先順）
+
+- **レックス: 本物のサンプルが届いたら** 右パネルの BOM / スコア 枠に入れ、`python scripts/fill_prices.py <BOM> <スコア> --show-columns` で列判定を確認し、`COL_GUESS` / `VENDOR_HINT` / `NOT_VENDOR` を実物に合わせる。合成データでは 2段見出し（上段商社名）、タイトル行付き BOM、全角型式、片方だけにある型式を確認済み。
 
 0. 別 PC で `setup.bat` を一度通す（2026-11-03 作成、Windows 実機では未実行。PowerShell が止まったらその画面の文面を貼る）。
 1. ~~SDK 疎通~~ 2026-11-03 に Windows 実機で画面→SDK→Claude Code まで到達を確認（認証エラーが Claude Code から返った）。残りは API キーを ⚙ で保存して返事が来ることの確認。

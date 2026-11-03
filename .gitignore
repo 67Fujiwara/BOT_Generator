@@ -8,3 +8,5 @@ app/config.json
 app/server.log
 .venv/
 .python-version
+samples/*
+!samples/.gitkeep

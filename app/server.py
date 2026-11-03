@@ -47,6 +47,7 @@ def _hide_child_windows():
 
 _hide_child_windows()
 INBOX = ROOT / "inbox"
+SAMPLES = ROOT / "samples"                  # ボットごとの参考サンプル（samples/<bot>/<ラベル>/）。git 対象外
 AGENTS_DIR = ROOT / ".claude" / "agents"
 HOST, PORT = "127.0.0.1", 8765
 CODE_STAMP = f"{os.path.getmtime(__file__):.0f}-{os.path.getsize(__file__)}"   # 起動時のコードの印。古い常駐を見分ける
@@ -100,8 +101,27 @@ def _front(path: Path) -> dict:
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip()
-    m = re.search(r"^tools:\s*\[(.*)\]", head, re.M) or re.search(r"^tools:\s*\n((?:\s+-\s*.+\n?)+)", head, re.M)
-    out["tools"] = [t.strip(" -") for t in re.split(r"[,\n]", m.group(1)) if t.strip(" -")] if m else []
+    for key in ("tools", "samples"):
+        m = re.search(rf"^{key}:\s*\[(.*)\]", head, re.M) or re.search(rf"^{key}:\s*\n((?:\s+-\s*.+\n?)+)", head, re.M)
+        out[key] = [t.strip(" -") for t in re.split(r"[,\n]", m.group(1)) if t.strip(" -")] if m else []
+    return out
+
+
+def _safe_name(name: str) -> str:
+    name = Path(name).name.strip() or "file"
+    return re.sub(r'[\\/:*?"<>|]', "_", name)
+
+
+def list_samples(bot_id: str, labels: list[str]) -> dict[str, list[str]]:
+    """{ラベル: [ROOT からの相対パス]}。定義にあるラベルは空でも出す。"""
+    out = {lab: [] for lab in labels} if labels else {}
+    base = SAMPLES / bot_id
+    if base.is_dir():
+        for d in sorted(p for p in base.iterdir() if p.is_dir()):
+            out.setdefault(d.name, [])
+            out[d.name] = [str(p.relative_to(ROOT)) for p in sorted(d.iterdir()) if p.is_file() and not p.name.startswith(".")]
+    if not out:
+        out["サンプル"] = []
     return out
 
 
@@ -129,7 +149,7 @@ def list_bots() -> list[dict]:
             "id": bid, "nick": nick, "file": p.name,
             "desc": d.split("。", 1)[1].strip() if "。" in d else d,
             "group": f.get("group", "未分類"), "model": f.get("model", "既定"),
-            "tools": f["tools"], "color": f.get("color", PALETTE[i % len(PALETTE)]),
+            "tools": f["tools"], "samples": f["samples"], "color": f.get("color", PALETTE[i % len(PALETTE)]),
             "preview": (last.get("text") or "")[:60].replace("\n", " "),
             "status": "",
         })
@@ -156,6 +176,34 @@ def inbox():
     """右パネル「コンピューター」用: 最近置かれたファイル。"""
     items = sorted(INBOX.rglob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
     return [{"path": str(p.relative_to(ROOT)), "at": p.stat().st_mtime} for p in items if p.is_file() and p.name != ".gitkeep"][:30]
+
+
+@app.get("/samples/{bot}")
+def get_samples(bot: str):
+    f = _agent_def(bot)
+    return list_samples(bot, f["samples"] if f else [])
+
+
+@app.post("/samples/{bot}")
+async def add_samples(bot: str, label: str = Form("サンプル"), files: list[UploadFile] = File(default=[])):
+    if not _agent_def(bot):
+        return {"ok": False, "error": "そのボットはありません"}
+    d = SAMPLES / _safe_name(bot) / _safe_name(label)
+    d.mkdir(parents=True, exist_ok=True)
+    for f in files:
+        if f.filename:
+            with (d / _safe_name(f.filename)).open("wb") as out:
+                shutil.copyfileobj(f.file, out)
+    return {"ok": True, **get_samples(bot)}
+
+
+@app.delete("/samples/{bot}")
+def delete_sample(bot: str, path: str):
+    target = (ROOT / path).resolve()
+    if not str(target).startswith(str((SAMPLES / bot).resolve()) + os.sep) or not target.is_file():
+        return {"ok": False, "error": "そのファイルは消せません"}
+    target.unlink()
+    return {"ok": True, **get_samples(bot)}
 
 
 @app.get("/version")
@@ -246,6 +294,10 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
         prompt = "お願いします"
     if saved:
         prompt += "\n\nファイル:\n" + "\n".join(f"- {p.relative_to(ROOT)}" for p in saved)
+    if agent:
+        smp = [(lab, f) for lab, fs in list_samples(bot_id, agent["samples"]).items() for f in fs]
+        if smp:
+            prompt += "\n\n参考サンプル（形式の確認用。編集しない）:\n" + "\n".join(f"- {lab}: {f}" for lab, f in smp)
 
     _history.setdefault(bot_id, []).append({"role": "me", "text": message.strip(),
                                             "files": [p.name for p in saved], "at": time.time()})

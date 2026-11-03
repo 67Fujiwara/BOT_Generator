@@ -92,6 +92,21 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .pane .mono{font:12px var(--mono);word-break:break-all}
 .toollog{font:12px var(--mono);color:var(--muted);border-left:2px solid var(--line);padding-left:10px;margin:0;white-space:pre-wrap;max-height:50vh;overflow-y:auto}
 .filelist{list-style:none;padding:0;margin:0} .filelist li{font:12px var(--mono);padding:4px 0;border-bottom:1px solid var(--line);word-break:break-all}
+/* サンプル置き場（右パネル） */
+.samples{margin-top:16px;border-top:1px solid var(--line);padding-top:10px}
+.samples h3{font-size:12px;color:var(--muted);margin:0 0 4px;font-weight:500}
+.slot{margin:8px 0 10px}
+.slot .slot-h{display:flex;align-items:center;gap:8px}
+.slot .slot-h b{font-weight:500;font-size:13px;flex:1}
+.slot .add{border:1px solid var(--line);background:none;color:var(--accent);font:inherit;font-size:12px;border-radius:999px;padding:2px 10px;cursor:pointer}
+.slot .add:hover{background:var(--bubble)}
+.slot ul{list-style:none;padding:0;margin:4px 0 0}
+.slot li{display:flex;align-items:center;gap:6px;font:12px var(--mono);padding:3px 0;word-break:break-all}
+.slot li span{flex:1}
+.slot li button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 4px}
+.slot li button:hover{color:var(--err)}
+.slot .none{font-size:12px;color:var(--muted);margin-top:2px}
+.slot.over{outline:2px dashed var(--accent);outline-offset:4px;border-radius:6px}
 
 /* ドラッグ中: 注意テープ風の枠 */
 body.drag::after{content:"ここに置くと添付されます";position:fixed;inset:12px;pointer-events:none;border:6px solid transparent;border-radius:14px;
@@ -237,7 +252,39 @@ function renderRight(){
     <dt>モデル</dt><dd>${esc(b.model)}</dd>
     <dt>使えるツール</dt><dd>${b.tools.length?b.tools.map(esc).join(', '):'なし（文章だけ返す）'}</dd>
     ${b.file?`<dt>定義ファイル</dt><dd class="mono">.claude/agents/${esc(b.file)}</dd>`:''}
-  </dl>`;
+  </dl>${b.id==='_auto'?'':'<div class="samples" id="samples"><h3>サンプル</h3></div>'}`;
+  if(b.id!=='_auto') renderSamples(b);
+}
+/* ── サンプル置き場: samples/<bot>/<ラベル>/ に保存。ボットは形式の参考に見る ── */
+async function renderSamples(b){
+  const box=$('#samples'); if(!box) return;
+  let data={}; try{ data=await (await fetch('/samples/'+encodeURIComponent(b.id))).json(); }catch(e){ return; }
+  if(current.id!==b.id) return;
+  box.innerHTML='<h3>サンプル <span style="font-weight:400">（形式の参考。ここにドロップでも追加できます）</span></h3>';
+  for(const [label,files] of Object.entries(data)){
+    const d=document.createElement('div'); d.className='slot';
+    d.innerHTML=`<div class="slot-h"><b>${esc(label)}</b><button class="add" type="button">＋ 追加</button></div>`+
+      (files.length?`<ul>${files.map(f=>`<li><span>${esc(f.split('/').pop())}</span><button type="button" title="削除" data-path="${esc(f)}">×</button></li>`).join('')}</ul>`:'<div class="none">まだありません</div>');
+    const inp=document.createElement('input'); inp.type='file'; inp.multiple=true; inp.hidden=true; d.appendChild(inp);
+    d.querySelector('.add').onclick=()=>inp.click();
+    inp.onchange=async()=>{ await uploadSamples(b,label,inp.files); };
+    d.querySelectorAll('li button').forEach(x=>x.onclick=async()=>{
+      if(!confirm(`サンプル「${x.previousElementSibling.textContent}」を削除しますか？`)) return;
+      await fetch('/samples/'+encodeURIComponent(b.id)+'?path='+encodeURIComponent(x.dataset.path),{method:'DELETE'}); renderSamples(b);
+    });
+    // ラベル枠へのドロップは、画面全体の「添付」ではなくサンプルとして保存する
+    d.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();d.classList.add('over');});
+    d.addEventListener('dragleave',()=>d.classList.remove('over'));
+    d.addEventListener('drop',async e=>{e.preventDefault();e.stopPropagation();d.classList.remove('over');dragDepth=0;document.body.classList.remove('drag');await uploadSamples(b,label,e.dataTransfer.files);});
+    box.appendChild(d);
+  }
+}
+async function uploadSamples(b,label,files){
+  if(!files||!files.length) return;
+  const fd=new FormData(); fd.append('label',label); for(const f of files) fd.append('files',f);
+  const r=await (await fetch('/samples/'+encodeURIComponent(b.id),{method:'POST',body:fd})).json();
+  if(!r.ok) alert(r.error||'保存できませんでした');
+  renderSamples(b);
 }
 function fileChips(files){ return files&&files.length?`<div class="files">${files.map(f=>`<span>${esc(f)}</span>`).join('')}</div>`:''; }
 function append(cls,html){ log.querySelector('.empty')?.remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
