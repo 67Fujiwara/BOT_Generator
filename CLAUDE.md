@@ -9,7 +9,8 @@
 - 比較はスクリプト（決定的）に任せ、Claude は列の判定と結果の要約だけを担当する。
 
 ## セットアップ
-pip install pandas openpyxl pdfplumber
+Python 3.10 以上が必要（claude-agent-sdk が 3.10 未満に対応していない。pyenv-win なら `pyenv local 3.12.10` でこのフォルダだけ切り替える）。
+pip install -r requirements.txt
 
 ## 表記ゆれの扱い
 全角/半角・大文字小文字・ハイフン・スペース・スラッシュは同一視する（KV-8000 = kv8000）。
