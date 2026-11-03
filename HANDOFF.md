@@ -78,6 +78,7 @@ bot-team/
   samples/<bot>/<ラベル>/  ボットごとの参考サンプル（git 対象外。右パネルから追加・削除。フロントマター samples: で枠を定義）
   tests/                  run_tests.py（バズが回す）/ cases.json（8 ケース: potato 4, rex 3, slinky 1）/ make_fixtures.py（入力を生成、fixtures/ は git 対象外）
   requirements.txt        pandas openpyxl pdfplumber fastapi uvicorn python-multipart claude-agent-sdk
+  update.bat              更新を一発で: git checkout -- . → git pull → pip install -r → run.bat（Windows 側で agents/*.md や requirements.txt が勝手に「変更あり」になり pull が止まる事故が 2 回あったため）
   setup.bat / setup.ps1   新しい PC の初期設定を一発で: Python 3.10+ 検出（なければ winget）→ .venv → pip → 自動起動登録 → 起動。再実行しても安全
   run.bat / run.sh        窓なしで裏起動（.venv があればその pythonw、なければ PATH の pythonw）＋ブラウザを開く
                           起動済みなら GET /version で印を比べ、同じなら開くだけ、古ければ POST /shutdown で止めて入れ替える（git pull 後も run.bat だけでよい）
