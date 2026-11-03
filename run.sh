@@ -1,4 +1,4 @@
 #!/bin/sh
+# bot-team を裏で起動してブラウザを開く。すでに起動済みならブラウザを開くだけ。終了は画面左上の ⏻。
 cd "$(dirname "$0")"
-(sleep 1; open http://127.0.0.1:8765 2>/dev/null || xdg-open http://127.0.0.1:8765) &
-python app/server.py
+nohup python app/server.py --open >> app/server.log 2>&1 &

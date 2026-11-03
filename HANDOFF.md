@@ -53,13 +53,15 @@ bot-team/
                           「おまかせ」だけ親エージェント経由で委譲（CLAUDE.md を読む）
                           GET/POST /settings で API キーを app/config.json に保存、POST /settings/test で疎通確認
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
-                          エンドポイント: GET / , /bots , /history/{bot} , /inbox , POST /chat (SSE)
+                          エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , POST /chat (SSE) , /settings , /settings/test , /shutdown
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。Enter送信、Shift+Enter改行
   inbox/                  ドロップしたファイルの保存先（git 対象外）
   tests/                  まだ空。サンプル入力→期待レポートを置く予定
   requirements.txt        pandas openpyxl pdfplumber fastapi uvicorn python-multipart claude-agent-sdk
-  run.bat / run.sh        起動＋ブラウザを開く（http://127.0.0.1:8765）
+  run.bat / run.sh        窓なしで裏起動（pythonw）＋ブラウザを開く。起動済みなら開くだけ（server.py がポートを見て判断）
+  autostart_on/off.bat    Windows ログオン時の自動起動を登録 / 解除（スタートアップにショートカット）
+                          終了は画面左上 ⏻ → POST /shutdown。pythonw のときの出力は app/server.log（git 対象外）
 ```
 
 `.claude/agents/*.md` のフロントマターに `group:` と `color:` を足すと左一覧のグループ分けと色に反映される（Claude Code 自体はこの2項目を無視する想定）。

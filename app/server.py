@@ -1,6 +1,7 @@
 """bot-team チャット入口。ブラウザからの文章＋ドロップしたファイルを Claude Agent SDK に渡す。
 
-起動:  python app/server.py   → http://127.0.0.1:8765
+起動:  run.bat（窓を出さずに裏で起動してブラウザを開く）/ python app/server.py --open
+終了:  画面左上の ⏻ ボタン（POST /shutdown）
 依存:  pip install fastapi uvicorn python-multipart claude-agent-sdk
 認証:  画面左上の ⚙ で API キーを保存（app/config.json）するか、
        環境変数 ANTHROPIC_API_KEY か、Claude Code にログイン済みであること
@@ -10,7 +11,10 @@ import json
 import os
 import re
 import shutil
+import socket
 import sys
+import threading
+import webbrowser
 import time
 from datetime import datetime
 from pathlib import Path
@@ -129,6 +133,13 @@ def inbox():
     """右パネル「コンピューター」用: 最近置かれたファイル。"""
     items = sorted(INBOX.rglob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
     return [{"path": str(p.relative_to(ROOT)), "at": p.stat().st_mtime} for p in items if p.is_file() and p.name != ".gitkeep"][:30]
+
+
+@app.post("/shutdown")
+def shutdown():
+    """画面の ⏻ から呼ばれる。応答を返してからプロセスを終了する。"""
+    threading.Timer(0.4, os._exit, [0]).start()
+    return {"ok": True}
 
 
 @app.get("/settings")
@@ -280,9 +291,33 @@ def _sse(obj: dict) -> str:
     return "data: " + json.dumps(obj, ensure_ascii=False) + "\n\n"
 
 
+def _port_in_use() -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sk:
+        return sk.connect_ex((HOST, PORT)) == 0
+
+
 if __name__ == "__main__":
+    import argparse
+
     import uvicorn
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--open", action="store_true", help="起動後にブラウザを開く")
+    args = ap.parse_args()
+    url = f"http://{HOST}:{PORT}"
+
+    if sys.stdout is None or sys.stderr is None:  # pythonw（窓なし）のときはログをファイルへ
+        log = open(ROOT / "app" / "server.log", "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    print(f"bot-team: http://{HOST}:{PORT}")
+
+    if _port_in_use():                      # すでに動いていればブラウザを開くだけ
+        print(f"bot-team: already running at {url}")
+        if args.open:
+            webbrowser.open(url)
+        sys.exit(0)
+    if args.open:
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    print(f"bot-team: {url}")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

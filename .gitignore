@@ -5,3 +5,4 @@ __pycache__/
 report.md
 app/history.json
 app/config.json
+app/server.log

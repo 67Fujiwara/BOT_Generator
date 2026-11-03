@@ -119,7 +119,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <body>
 
 <aside class="left">
-  <div class="left-top"><h1>bot-team</h1><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
+  <div class="left-top"><h1>bot-team</h1><button class="icon-btn" id="powerBtn" title="サーバーを終了する（次回は run.bat から）">⏻</button><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
   <div class="left-top" style="padding-top:0"><input id="filter" placeholder="ボットを探す"></div>
   <div class="groups" id="groups"></div>
 </aside>
@@ -299,6 +299,11 @@ async function loadSettings(){
 }
 function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); dlg.showModal(); apiKey.focus(); }
 $('#settingsBtn').onclick=()=>openSettings();
+$('#powerBtn').onclick=async()=>{
+  if(!confirm('サーバーを終了します。次に使うときは run.bat をダブルクリックしてください。')) return;
+  try{ await fetch('/shutdown',{method:'POST'}); }catch(e){}
+  document.body.innerHTML='<div class="empty" style="margin:auto;grid-column:1/-1">bot-team を終了しました。<br>次に使うときは run.bat をダブルクリックしてください（窓は出ません）。</div>';
+};
 $('#setClose').onclick=()=>{ dlg.close(); try{localStorage.setItem('settingsSeen','1');}catch(e){} };
 $('#setSave').onclick=async()=>{
   const fd=new FormData(); fd.append('api_key',apiKey.value);
