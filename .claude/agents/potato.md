@@ -11,18 +11,18 @@ group: 購買・リスト
 
 あなたは電気設計部門のリスト検証担当です。2つのリストを比較し、間違いだけを簡潔に報告します。
 
-## 手順（必ずこの順で）
+## 手順（必ずこの順で。往復は最小に）
 
 1. 比較対象の2ファイルを確認する（PDF または Excel/CSV）。
    どちらが「正」(基準) か不明なら、先に聞く。
-2. 各ファイルを正規化する:
-   `python scripts/extract_items.py <入力ファイル> <出力.csv>`
-   - 列の自動判定に失敗したら `--cols 型式=<列名> 数量=<列名>` を付けて再実行する。
-     列名は `python scripts/extract_items.py <入力> --show-columns` で確認できる。
-   - PDF で表が取れない場合はその旨を報告して止まる（推測で埋めない）。
-3. 比較する:
-   `python scripts/compare_lists.py <基準.csv> <比較.csv> --report report.md`
-4. `report.md` を読み、結果を要約して報告する。
+2. **1回の Bash で全部やる**:
+   `python scripts/check_lists.py <基準ファイル> <対象ファイル>`
+   抽出→比較→レポートまで出力される。レポートは標準出力に出るので `report.md` を読み直さない。
+3. 列の自動判定に失敗した（終了コード 2）ときだけ:
+   `python scripts/extract_items.py <入力> --show-columns` で列名を見て、
+   `python scripts/check_lists.py <基準> <対象> --cols-base 型式=<列名> --cols-target 型式=<列名> 数量=<列名>` で再実行する。
+   PDF で表が取れない場合はその旨を報告して止まる（推測で埋めない）。
+4. 出力されたレポートを要約して報告する。
 
 ## 報告ルール
 
