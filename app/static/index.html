@@ -147,7 +147,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 </aside>
 
 <section class="center">
-  <div class="topbar"><span class="avatar" id="topAvatar">?</span><span class="name" id="topName">おまかせ</span>
+  <div class="topbar"><span class="avatar" id="topAvatar">?</span><span class="name" id="topName">ウッディ</span>
     <span class="spacer"></span><button class="plain" id="newChat">新しい会話</button></div>
   <div class="log" id="log"></div>
   <div class="status" id="status"></div>
@@ -165,7 +165,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 </section>
 
 <aside class="right">
-  <div class="hero"><span class="avatar" id="rAvatar">?</span><div class="n" id="rName">おまかせ</div></div>
+  <div class="hero"><span class="avatar" id="rAvatar">?</span><div class="n" id="rName">ウッディ</div></div>
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-pane="detail">詳細</button>
     <button role="tab" aria-selected="false" data-pane="log">作業ログ</button>
@@ -206,7 +206,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <script>
 const $=s=>document.querySelector(s);
 const log=$('#log'), input=$('#input'), sendBtn=$('#send'), attachedEl=$('#attached'), statusEl=$('#status'), toollog=$('#toollog');
-const AUTO={id:'_auto',nick:'おまかせ',desc:'内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#A8B3C0',preview:''};
+const AUTO={id:'_auto',nick:'ウッディ',desc:'おまかせ役。内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#D98E5B',shape:'woody',preview:''};
 let bots=[], current=AUTO, pending=[], busy=new Set(), resetNext=false;
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const md=s=>window.marked?marked.parse(s,{breaks:true}):esc(s).replace(/\n/g,'<br>');
@@ -233,6 +233,7 @@ let gid=0;
 const SHAPES={
   buzz:  {d:'M8 78C8 62 18 56 28 54C24 8 76 8 72 54C82 56 92 62 92 78C92 90 80 93 72 93L28 93C20 93 8 90 8 78Z', ex:50, ey:36, dx:11, er:8},
   slinky:{d:'M8 46C8 28 36 26 38 44L38 50C55 48 72 48 86 50C90 44 94 38 96 36C97 44 94 54 90 60C92 70 86 74 78 74L30 74C20 74 14 70 12 60C8 56 8 52 8 46Z', ex:22, ey:40, dx:6, er:5},
+  woody: {d:'M6 40C6 33 20 32 30 33C30 10 70 10 70 33C80 32 94 33 94 40C94 46 82 46 74 45C76 60 72 80 60 90C56 94 44 94 40 90C28 80 24 60 26 45C18 46 6 46 6 40Z', ex:50, ey:62, dx:10, er:7},
 };
 const avatar=(b,cls='avatar',id='',live=false)=>{
   const seed=hash(b.id), g='g'+(++gid), sh=SHAPES[b.shape];
