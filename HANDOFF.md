@@ -28,19 +28,19 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 | レックス | rex | 購買の相見積もりスコア(Excel)から商社ごとの金額を拾い、BOM(Excel)に転記した `<BOM名>_見積.xlsx` を作る。右端に商社ごとの単価・金額列。型式不一致は空欄＋要確認 | Read, Bash, Glob | 購買・リスト |
 | バズ | buzz | 検証役。`tests/run_tests.py` を1回の Bash で回して PASS/FAIL を報告。直さない | Bash, Read, Glob | 検証 |
 | スリンキー | slinky | 録音/文字起こし → `transcribe.py`（文字起こし＋フィラー除去）→ 議事録 md（決定事項/ToDo/論点）。日時・参加者が不明なら1回聞く | Bash, Read, Glob, Write | 文章 |
-| ポーク | pork | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可）。model: haiku | なし | 文章 |
+| ハム（旧ポーク） | ham | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可）。model: haiku | なし | 文章 |
 
 ポテトのルール: 入力ファイルは編集しない。表記ゆれ（全角半角・大文字小文字・ハイフン・スペース・スラッシュ）はスクリプトが吸収するが、それ以上の「似た型式」は一致扱いにせず「要確認」として両方を並べる。
-ポークのルール: 意味・数値・型式を変えない。整えた文だけ返す。
+ハムのルール: 意味・数値・型式を変えない。整えた文だけ返す。
 全ボット共通（`.claude/bot_rules.md`、2026-11-03 決定）: 足りない情報は穴埋めせず、先に1回にまとめて聞いて止まる。答えが来てから本来の出力だけ返す。サーバーが直接呼びのシステムプロンプト末尾にこのファイルを自動で足す。CLAUDE.md にも同じ要約がある。
 
 ## リポジトリ構成
 
 ```
 bot-team/
-  CLAUDE.md               プロジェクト説明（ポテト・ポークの呼び方、入口の説明）
+  CLAUDE.md               プロジェクト説明（各ボットの呼び方、共通ルール、入口の説明）
   HANDOFF.md              このファイル
-  .claude/agents/         potato.md  pork.md  rex.md  buzz.md  slinky.md
+  .claude/agents/         potato.md  ham.md  rex.md  buzz.md  slinky.md
   .claude/bot_rules.md    全ボット共通ルール（足りない情報は先に聞く）。server.py が毎回システムプロンプトに追記
   scripts/
     extract_items.py      PDF/Excel/CSV → 標準CSV（型式,型式KEY,品名,数量,単価,金額,メーカ,備考）
@@ -92,13 +92,13 @@ bot-team/
 - 2026-11-03 追記: `claude-agent-sdk` 0.2.177 のソースと突き合わせ、`server.py` が使う名前（`query`, `ClaudeAgentOptions`, `AssistantMessage`, `ResultMessage`, `TextBlock`, `ToolUseBlock`）と引数（`cwd`, `setting_sources=["project"]`, `allowed_tools`, `permission_mode="acceptEdits"`, `resume`）、`ResultMessage.session_id` はすべて存在することを確認済み。wheel に Claude Code CLI 2.1.317 が同梱されているので、別途 `npm install -g @anthropic-ai/claude-code` は不要。実際に API を呼ぶところまでは未実行。
 - 同日、`scripts/extract_items.py` と `compare_lists.py` を合成データ（Excel の BOM と CSV の発注書、列名違い・全角型式・小計行入り）で再確認し、漏れ/余分/数量不一致/単価不一致/金額合計差がすべて検出された。
 
-## 応答速度（2026-11-03 実測、同じ1文をポークに）
+## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 
 | 経路 | 時間 | 備考 |
 |---|---|---|
-| おまかせ → 親が委譲 → ポーク → 親が言い直し | 13〜30 s | LLM 3回直列。親が前置きや件名を勝手に足す |
-| ポーク直接（haiku） | 3.8〜3.9 s | 整えた文だけ返る |
-| ポーク直接（sonnet） | 2.5 s | 1回のみの計測。haiku と大差なし |
+| ウッディ → 親が委譲 → ハム → 親が言い直し | 13〜30 s | LLM 3回直列。親が前置きや件名を勝手に足す |
+| ハム（旧ポーク）直接（haiku） | 3.8〜3.9 s | 整えた文だけ返る |
+| ハム（旧ポーク）直接（sonnet） | 2.5 s | 1回のみの計測。haiku と大差なし |
 | レックス直接（sonnet） | 10.8 s | 合成 BOM＋スコアで Bash 1回（fill_prices.py）。このクラウド環境での計測 |
 | バズ直接（haiku） | 16.5 s | 8 ケースを Bash 1回で実行。大半はスクリプト実行時間（pandas 起動×8） |
 | ポテト直接（sonnet） | 未計測 | 2026-11-03 に Bash 往復を 3〜4 回 → 1 回（check_lists.py）に削減。実ファイルで計測して埋める |
@@ -111,7 +111,7 @@ bot-team/
 
 0. 別 PC で `setup.bat` を一度通す（2026-11-03 作成、Windows 実機では未実行。PowerShell が止まったらその画面の文面を貼る）。
 1. ~~SDK 疎通~~ 2026-11-03 に Windows 実機で画面→SDK→Claude Code まで到達を確認（認証エラーが Claude Code から返った）。残りは API キーを ⚙ で保存して返事が来ることの確認。
-   Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ポークに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
+   Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ハムに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
 2. 本物の見積PDF・発注書Excelでポテトを走らせ、`--show-columns` で列判定を確認し、`COL_GUESS` に候補を足す。
 3. ~~`tests/` にサンプル入力と期待レポートを置き、検証役ボット（verifier）を追加して全テストを回させる。~~ 2026-11-03 完了（バズ）。ボットやスクリプトを足したら `tests/cases.json` にケースを足す。
 - **スリンキー: 実際の録音で未検証**（この環境に OpenAI キーなし）。整形と鍵なし時のエラー文だけ確認済み。最初の1回は短い録音で `python scripts/transcribe.py <音声>` を手で回し、文字起こし精度とフィラー除去のやり過ぎ（`FILLERS_BOUNDED` の「はい」「ね」など）を見る。エンジン候補は中立ベンチマークが無いので実音声で比較して決める。
@@ -121,3 +121,5 @@ bot-team/
 ## 会社ファイルを扱う上での注意
 
 Claude Code / API 側のプライバシー設定（学習に使われない設定）を先に確認する。`inbox/` と `app/history.json` は git に入れない（.gitignore 済み）。
+
+2026-11-03: ポーク → ハム（id も pork → ham、ファイルは ham.md）。アイコンは Toy Story 風の固定シルエット（woody/potato/ham/rex/buzz/slinky）を index.html の SHAPES に定義。
