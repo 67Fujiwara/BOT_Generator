@@ -68,7 +68,7 @@ bot-team/
 
 ## 次にやること（優先順）
 
-1. Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install 3.12.10` → リポジトリ内で `pyenv local 3.12.10`）→ `pip install -r requirements.txt` → `run.bat` → ポークに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
+1. Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ポークに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
 2. 本物の見積PDF・発注書Excelでポテトを走らせ、`--show-columns` で列判定を確認し、`COL_GUESS` に候補を足す。
 3. `tests/` にサンプル入力と期待レポートを置き、検証役ボット（verifier）を追加して全テストを回させる。
 4. ボット階層の本体（lead / worker / verifier）に着手。最初は「リード1・ワーカー2・検証1」の小さい構成から。

@@ -9,7 +9,7 @@
 - 比較はスクリプト（決定的）に任せ、Claude は列の判定と結果の要約だけを担当する。
 
 ## セットアップ
-Python 3.10 以上が必要（claude-agent-sdk が 3.10 未満に対応していない。pyenv-win なら `pyenv local 3.12.10` でこのフォルダだけ切り替える）。
+Python 3.10 以上が必要（claude-agent-sdk が 3.10 未満に対応していない。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を入れて `pyenv local 3.12.x` でこのフォルダだけ切り替える）。
 pip install -r requirements.txt
 
 ## 表記ゆれの扱い
