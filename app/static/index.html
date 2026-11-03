@@ -326,14 +326,14 @@ function fmtT(sec){ const s=Math.floor(sec); return `${String(Math.floor(s/60)).
 async function toggleRec(){
   if(live){ await stopLive(); return; }
   const b=current;
-  const includeTab = confirm('オンライン会議（Teams / Zoom のブラウザタブ）の音声も一緒に録りますか？\nOK → 次に出る画面共有の選択で会議のタブを選び「タブの音声を共有」を有効にしてください。\nキャンセル → マイクだけ録ります。');
+  const includeTab = confirm('Google Meet の音声（相手の声）も一緒に録りますか？\n\nOK → 次に出る共有の選択で「Chrome タブ」→ Meet のタブを選び、左下の「タブの音声も共有する」をオンにして「共有」。\n　　 （自分の声はマイクから録るので、Meet 側のマイクはそのままで構いません）\nキャンセル → マイクだけ録ります（対面会議向け）。');
   let mic, tab=null, ctx;
   try{ mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
   catch(e){ alert('マイクを使えませんでした。ブラウザのマイク許可を確認してください。\n'+e.message); return; }
   ctx=new AudioContext(); const dest=ctx.createMediaStreamDestination(); ctx.createMediaStreamSource(mic).connect(dest);
   if(includeTab){
     try{ tab=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true}); tab.getVideoTracks().forEach(t=>t.stop());
-      if(tab.getAudioTracks().length) ctx.createMediaStreamSource(tab).connect(dest); else alert('タブの音声が取れませんでした（「タブの音声を共有」がオフ）。マイクだけで続けます。'); }
+      if(tab.getAudioTracks().length) ctx.createMediaStreamSource(tab).connect(dest); else alert('タブの音声が取れませんでした。共有の選択で「Chrome タブ」を選び、「タブの音声も共有する」をオンにしてください。今回はマイクだけで続けます。'); }
     catch(e){ tab=null; }
   }
   const mime=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'].find(m=>MediaRecorder.isTypeSupported(m));
