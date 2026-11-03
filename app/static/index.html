@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bot-team</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<style>
+:root{
+  --bg:#F7F8FA; --side:#FFFFFF; --surface:#FFFFFF; --bubble:#F1F2F5; --ink:#1A2230; --muted:#6B7684;
+  --line:#E3E6EB; --accent:#1F5FBF; --accent-ink:#FFF; --caution:#F2C32A; --err:#B3261E;
+  --mono:ui-monospace,"SF Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; }
+}
+*{box-sizing:border-box} html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14.5px/1.7 "Noto Sans JP",system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;
+  display:grid;grid-template-columns:270px 1fr 300px;grid-template-rows:100%;overflow:hidden}
+
+/* ── 左: ボット一覧 ── */
+aside.left{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.left-top{display:flex;align-items:center;gap:8px;padding:12px 14px 8px}
+.left-top h1{font-size:15px;font-weight:700;margin:0;flex:1}
+.icon-btn{border:1px solid var(--line);background:none;color:var(--ink);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;line-height:1}
+.icon-btn:hover{background:var(--bubble)}
+.left-top input{width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink)}
+.groups{overflow-y:auto;flex:1;padding:4px 8px 16px}
+.group-name{font-size:12px;color:var(--muted);padding:14px 8px 4px}
+.item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;cursor:pointer;border:0;background:none;width:100%;text-align:left;font:inherit;color:var(--ink)}
+.item:hover{background:var(--bubble)} .item[aria-current="true"]{background:var(--bubble);outline:1px solid var(--line)}
+.avatar{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+.item .t{min-width:0;flex:1} .item .n{font-weight:500;line-height:1.3} .item .p{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .p.live{color:var(--accent)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none;display:none}
+.item.busy .dot{display:block;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+
+/* ── 中央: 会話 ── */
+section.center{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+.topbar .avatar{width:26px;height:26px;font-size:12px}
+.topbar .name{font-weight:700}
+.topbar .spacer{flex:1}
+.topbar button.plain{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.topbar button.plain:hover{color:var(--ink)}
+.log{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px}
+.empty{color:var(--muted);text-align:center;margin:auto;line-height:2}
+.msg{max-width:min(720px,88%);padding:12px 16px;border-radius:12px;word-break:break-word}
+.me{background:var(--accent);color:var(--accent-ink);align-self:flex-end;border-bottom-right-radius:3px;white-space:pre-wrap}
+.me .files{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.me .files span{font:12px var(--mono);background:rgba(255,255,255,.18);padding:2px 8px;border-radius:4px}
+.bot-msg{background:var(--bubble);align-self:flex-start;border-bottom-left-radius:3px}
+.bot-msg>:first-child{margin-top:0} .bot-msg>:last-child{margin-bottom:0}
+.bot-msg h1,.bot-msg h2,.bot-msg h3{font-size:15px;margin:14px 0 4px}
+.bot-msg ul,.bot-msg ol{padding-left:22px;margin:4px 0}
+.bot-msg table{border-collapse:collapse;margin:8px 0;font-size:13.5px;display:block;overflow-x:auto}
+.bot-msg td,.bot-msg th{border:1px solid var(--line);padding:3px 10px;text-align:left}
+.bot-msg code{font:13px var(--mono);background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+.bot-msg pre{background:rgba(0,0,0,.06);padding:10px;border-radius:8px;overflow-x:auto}
+.meta{font-size:12px;color:var(--muted);align-self:flex-start;padding-left:4px}
+.error{color:var(--err);align-self:flex-start;font-size:13.5px}
+
+.status{display:flex;align-items:center;gap:8px;padding:6px 24px;font-size:13px;color:var(--muted);min-height:34px}
+.status .avatar{width:20px;height:20px;font-size:10px}
+.status:empty{display:none}
+
+.composer{padding:8px 20px 16px;background:var(--surface);border-top:1px solid var(--line)}
+.attached{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px} .attached:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:6px;font:12px var(--mono);background:var(--bubble);border:1px solid var(--line);padding:3px 4px 3px 9px;border-radius:6px}
+.chip button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 4px}
+.row{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:12px;padding:6px 8px 6px 6px;background:var(--bg)}
+.row:focus-within{border-color:var(--accent)}
+textarea{flex:1;resize:none;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;line-height:1.6;min-height:36px;max-height:220px;padding:6px 4px}
+.send{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:500;cursor:pointer}
+.send:disabled{opacity:.45;cursor:default}
+
+/* ── 右: ボット詳細 ── */
+aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:auto;padding:28px 18px}
+.right .hero{text-align:center;margin-bottom:14px}
+.right .hero .avatar{width:64px;height:64px;font-size:26px;margin:0 auto 10px}
+.right .hero .n{font-weight:700;font-size:16px}
+.tabs{display:flex;justify-content:center;gap:4px;margin-bottom:14px}
+.tabs button{border:0;background:none;color:var(--muted);font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--bubble);color:var(--ink)}
+.pane{font-size:13.5px} .pane dt{color:var(--muted);font-size:12px;margin-top:12px} .pane dd{margin:2px 0 0}
+.pane .mono{font:12px var(--mono);word-break:break-all}
+.toollog{font:12px var(--mono);color:var(--muted);border-left:2px solid var(--line);padding-left:10px;margin:0;white-space:pre-wrap;max-height:50vh;overflow-y:auto}
+.filelist{list-style:none;padding:0;margin:0} .filelist li{font:12px var(--mono);padding:4px 0;border-bottom:1px solid var(--line);word-break:break-all}
+
+/* ドラッグ中: 注意テープ風の枠 */
+body.drag::after{content:"ここに置くと添付されます";position:fixed;inset:12px;pointer-events:none;border:6px solid transparent;border-radius:14px;
+  background:repeating-linear-gradient(45deg,var(--caution) 0 18px,var(--ink) 18px 36px) border-box;
+  -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:var(--ink)}
+@media (max-width:980px){ body{grid-template-columns:230px 1fr} aside.right{display:none} }
+@media (prefers-reduced-motion:reduce){ .item.busy .dot{animation:none} }
+</style>
+</head>
+<body>
+
+<aside class="left">
+  <div class="left-top"><h1>bot-team</h1><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
+  <div class="left-top" style="padding-top:0"><input id="filter" placeholder="ボットを探す"></div>
+  <div class="groups" id="groups"></div>
+</aside>
+
+<section class="center">
+  <div class="topbar"><span class="avatar" id="topAvatar">?</span><span class="name" id="topName">おまかせ</span>
+    <span class="spacer"></span><button class="plain" id="newChat">新しい会話</button></div>
+  <div class="log" id="log"></div>
+  <div class="status" id="status"></div>
+  <div class="composer">
+    <div class="attached" id="attached"></div>
+    <div class="row">
+      <button class="icon-btn" id="pick" title="ファイルを選ぶ" style="border:0">＋</button>
+      <textarea id="input" rows="1" placeholder="メッセージ（ファイルは画面のどこにでもドロップ）"></textarea>
+      <button class="send" id="send">送信</button>
+    </div>
+    <input type="file" id="file" multiple hidden>
+  </div>
+</section>
+
+<aside class="right">
+  <div class="hero"><span class="avatar" id="rAvatar">?</span><div class="n" id="rName">おまかせ</div></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-pane="detail">詳細</button>
+    <button role="tab" aria-selected="false" data-pane="log">作業ログ</button>
+    <button role="tab" aria-selected="false" data-pane="files">ファイル</button>
+  </div>
+  <div class="pane" id="pane-detail"></div>
+  <div class="pane" id="pane-log" hidden><pre class="toollog" id="toollog">（まだ何もしていません）</pre></div>
+  <div class="pane" id="pane-files" hidden><ul class="filelist" id="filelist"></ul></div>
+</aside>
+
+<script>
+const $=s=>document.querySelector(s);
+const log=$('#log'), input=$('#input'), sendBtn=$('#send'), attachedEl=$('#attached'), statusEl=$('#status'), toollog=$('#toollog');
+const AUTO={id:'_auto',nick:'おまかせ',desc:'内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#6D6E71',preview:''};
+let bots=[], current=AUTO, pending=[], busy=new Set(), resetNext=false;
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const md=s=>window.marked?marked.parse(s,{breaks:true}):esc(s).replace(/\n/g,'<br>');
+const avatar=(b,cls='avatar')=>`<span class="${cls}" style="background:${b.color}">${esc(b.nick[0]||'?')}</span>`;
+
+async function loadBots(){
+  bots=await (await fetch('/bots')).json();
+  renderList();
+}
+function renderList(){
+  const q=$('#filter').value.trim();
+  const wrap=$('#groups'); wrap.innerHTML='';
+  const groups={}; [...bots].filter(b=>!q||b.nick.includes(q)||b.desc.includes(q)).forEach(b=>(groups[b.group]??=[]).push(b));
+  const mk=b=>{
+    const el=document.createElement('button'); el.className='item'+(busy.has(b.id)?' busy':''); el.type='button';
+    el.setAttribute('aria-current', String(current.id===b.id));
+    const live=b.status; 
+    el.innerHTML=`${avatar(b)}<span class="t"><div class="n">${esc(b.nick)}</div><div class="p ${live?'live':''}">${esc(live||b.preview||b.desc)}</div></span><span class="dot"></span>`;
+    el.onclick=()=>select(b); return el;
+  };
+  wrap.appendChild(mk(AUTO));
+  for(const [g,list] of Object.entries(groups)){
+    const h=document.createElement('div'); h.className='group-name'; h.textContent=g; wrap.appendChild(h);
+    list.forEach(b=>wrap.appendChild(mk(b)));
+  }
+}
+async function select(b){
+  current=b; renderList(); renderRight();
+  $('#topAvatar').outerHTML=avatar(b).replace('class="avatar"','class="avatar" id="topAvatar"'); $('#topName').textContent=b.nick;
+  log.innerHTML=''; statusEl.innerHTML='';
+  const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
+  if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>Enter で送信、Shift+Enter で改行</div>`;
+  hist.forEach(m=>m.role==='me'?append('msg me',esc(m.text)+fileChips(m.files)):append('msg bot-msg',md(m.text)));
+  input.focus();
+}
+function renderRight(){
+  const b=current;
+  $('#rAvatar').outerHTML=avatar(b).replace('class="avatar"','class="avatar" id="rAvatar"'); $('#rName').textContent=b.nick;
+  $('#pane-detail').innerHTML=`<dl>
+    <dt>役割</dt><dd>${esc(b.desc)}</dd>
+    <dt>グループ</dt><dd>${esc(b.group||'—')}</dd>
+    <dt>モデル</dt><dd>${esc(b.model)}</dd>
+    <dt>使えるツール</dt><dd>${b.tools.length?b.tools.map(esc).join(', '):'なし（文章だけ返す）'}</dd>
+    ${b.file?`<dt>定義ファイル</dt><dd class="mono">.claude/agents/${esc(b.file)}</dd>`:''}
+  </dl>`;
+}
+function fileChips(files){ return files&&files.length?`<div class="files">${files.map(f=>`<span>${esc(f)}</span>`).join('')}</div>`:''; }
+function append(cls,html){ log.querySelector('.empty')?.remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
+function setStatus(b,text){ const it=bots.find(x=>x.id===b.id); if(it) it.status=text; statusEl.innerHTML=text?`${avatar(b)}<span>${esc(text)}</span>`:''; renderList(); }
+function addFiles(list){ for(const f of list) if(!pending.some(p=>p.name===f.name&&p.size===f.size)) pending.push(f); renderAttached(); }
+function renderAttached(){ attachedEl.innerHTML=''; pending.forEach((f,i)=>{ const c=document.createElement('span'); c.className='chip'; c.innerHTML=`${esc(f.name)}<button type="button" aria-label="外す">×</button>`; c.querySelector('button').onclick=()=>{pending.splice(i,1);renderAttached();}; attachedEl.appendChild(c); }); }
+async function refreshFiles(){ const l=await (await fetch('/inbox')).json(); $('#filelist').innerHTML=l.length?l.map(f=>`<li>${esc(f.path)}</li>`).join(''):'<li>まだありません</li>'; }
+
+async function send(){
+  const text=input.value.trim(); const b=current;
+  if(busy.has(b.id)||(!text&&!pending.length)) return;
+  busy.add(b.id); sendBtn.disabled=true;
+  const files=pending.slice(); pending=[]; renderAttached();
+  append('msg me',esc(text)+fileChips(files.map(f=>f.name)));
+  input.value=''; input.style.height='';
+  const fd=new FormData(); fd.append('message',text); fd.append('bot',b.id==='_auto'?'':b.id);
+  if(resetNext){fd.append('new_session','true');resetNext=false;} files.forEach(f=>fd.append('files',f));
+  setStatus(b,'考えています'); toollog.textContent='';
+  try{
+    const res=await fetch('/chat',{method:'POST',body:fd});
+    const rd=res.body.getReader(), dec=new TextDecoder(); let buf='';
+    while(true){
+      const {value,done}=await rd.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true}); let i;
+      while((i=buf.indexOf('\n\n'))>=0){
+        const line=buf.slice(0,i).replace(/^data: /,''); buf=buf.slice(i+2); if(!line) continue;
+        const ev=JSON.parse(line);
+        if(ev.type==='text'){ if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
+        else if(ev.type==='tool'){ setStatus(b,ev.text); toollog.textContent+=ev.text+'\n'; }
+        else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`); }
+        else if(ev.type==='error'){ append('error',esc(ev.text)); }
+      }
+    }
+  }catch(e){ append('error','サーバーに届きません。python app/server.py が動いているか確認してください。'); }
+  busy.delete(b.id); setStatus(b,''); sendBtn.disabled=false; input.focus();
+  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles();
+}
+
+sendBtn.onclick=send;
+input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();} });
+input.addEventListener('input',()=>{input.style.height='';input.style.height=Math.min(input.scrollHeight,220)+'px';});
+$('#filter').addEventListener('input',renderList);
+$('#pick').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{addFiles(e.target.files);e.target.value='';};
+$('#newChat').onclick=()=>{ resetNext=true; log.innerHTML=''; append('meta','新しい会話（次の送信から前の文脈は引き継ぎません）'); };
+$('#newBot').onclick=()=>alert('.claude/agents/ に <name>.md を置いて、ページを再読み込みしてください。');
+document.querySelectorAll('.tabs button').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true');
+  ['detail','log','files'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles();
+});
+let dragDepth=0;
+document.addEventListener('dragenter',e=>{e.preventDefault();if(++dragDepth===1)document.body.classList.add('drag');});
+document.addEventListener('dragleave',()=>{if(--dragDepth===0)document.body.classList.remove('drag');});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;document.body.classList.remove('drag');addFiles(e.dataTransfer.files);input.focus();});
+document.addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles(e.clipboardData.files);});
+loadBots().then(()=>select(AUTO));
+</script>
+</body>
+</html>

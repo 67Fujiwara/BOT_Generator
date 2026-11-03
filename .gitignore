@@ -1,0 +1,6 @@
+inbox/*
+!inbox/.gitkeep
+__pycache__/
+*.normalized.csv
+report.md
+app/history.json

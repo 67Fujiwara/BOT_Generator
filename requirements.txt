@@ -1,0 +1,7 @@
+pandas
+openpyxl
+pdfplumber
+fastapi
+uvicorn
+python-multipart
+claude-agent-sdk
