@@ -49,7 +49,7 @@ API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` �
 「スリンキー」と呼ばれたら必ず slinky サブエージェントに委譲すること。
 会議は Google Meet。スリンキーを選ぶと入力欄に 🎙 が出て、**ライブ録音**ができる: マイク（＋Meet のタブ音声。共有の選択で「Chrome タブ」→ Meet のタブ →「タブの音声も共有する」をオン）を 45 秒ごとに区切って `POST /transcribe/chunk` に送り、文字が会議中にチャットへ出る。停止すると全文（時刻付き）を `inbox/録音_<日時>/文字起こし_raw.txt` に保存し、txt を添付してスリンキーに自動送信 → 議事録。
 区切りは MediaRecorder の timeslice ではなく stop→start で作る（断片にヘッダが無いと Whisper が読めない）。用語（⚙ の「用語」）と直前の区切りの末尾をプロンプトに入れて固有名詞を安定させ、無音の幻聴（「ご視聴ありがとうございました」等）と低信頼の区切りは捨てる。
-文字起こしエンジン（⚙ で選択）: 自動 / OpenAI gpt-4o-transcribe（「文字起こし API キー」） / ローカル Whisper（`pip install faster-whisper`、鍵不要） / 外部サーバー（SYNAPSE の `/api/minutes/transcribe` と同じ形に転送、URL とトークンを設定）。録音ファイルのドロップも従来どおり（25MB 超は ffmpeg で分割）。日時・参加者が分からなければ1回だけ聞く。
+文字起こしエンジン（⚙ で選択）: **Cloudflare Workers AI の Whisper large-v3-turbo（無料枠、既定のおすすめ。アカウント ID と API トークンを ⚙ に保存、REST で直接呼ぶのでデプロイ不要）** / OpenAI gpt-4o-transcribe（有料、「文字起こし API キー」） / ローカル Whisper（`pip install faster-whisper`、鍵不要） / 外部サーバー（SYNAPSE の `/api/minutes/transcribe` と同じ形に転送）。自動は 外部サーバー → Cloudflare → OpenAI → ローカル の順。録音ファイルのドロップも従来どおり（25MB 超は ffmpeg で分割）。日時・参加者が分からなければ1回だけ聞く。
 
 ## サンプル置き場
 右パネルの「サンプル」に、ボットごとの参考ファイルを置ける（`samples/<bot>/<ラベル>/`、git 対象外）。

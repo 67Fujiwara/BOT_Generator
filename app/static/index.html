@@ -197,11 +197,16 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
   <details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">ライブ録音・文字起こしの設定（スリンキー）</summary>
     <label for="trEngine">文字起こしエンジン</label>
     <select id="trEngine" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
-      <option value="auto">自動（外部サーバー → OpenAI → ローカル Whisper の順で使えるもの）</option>
-      <option value="openai">OpenAI（上の文字起こしキー）</option>
+      <option value="auto">自動（外部サーバー → Cloudflare → OpenAI → ローカル Whisper の順で使えるもの）</option>
+      <option value="cloudflare">Cloudflare Workers AI の Whisper（無料枠あり・おすすめ）</option>
+      <option value="openai">OpenAI（上の文字起こしキー、有料）</option>
       <option value="whisper">ローカル Whisper（faster-whisper、鍵不要）</option>
       <option value="remote">外部サーバー（SYNAPSE の /api/minutes/transcribe など）</option>
     </select>
+    <label for="cfAccount">Cloudflare アカウント ID <span style="font-weight:400">（dash.cloudflare.com → Workers & Pages の右側「Account ID」）</span></label>
+    <input id="cfAccount" type="text" placeholder="32桁の英数字" autocomplete="off" spellcheck="false">
+    <label for="cfToken">Cloudflare API トークン <span id="cfTokenCurrent" style="margin-left:8px"></span><span style="font-weight:400">（プロフィール → API Tokens → Create Token → テンプレート「Workers AI」）</span></label>
+    <input id="cfToken" type="password" placeholder="空で保存すると変更なし" autocomplete="off">
     <label for="trUrl">外部サーバーの URL</label>
     <input id="trUrl" type="text" placeholder="https://…/api/minutes/transcribe" autocomplete="off" spellcheck="false">
     <label for="trToken">外部サーバーのトークン <span id="trTokenCurrent" style="margin-left:8px"></span></label>
@@ -503,6 +508,7 @@ async function loadSettings(){
   $('#openaiCurrent').textContent = st.openai_key_set ? `（保存済み ${st.openai_key_hint}）` : '（未設定）';
   $('#openaiClear').disabled=!st.openai_key_set;
   $('#trEngine').value=st.transcribe_engine||'auto'; $('#trUrl').value=st.remote_transcribe_url||'';
+  $('#cfAccount').value=st.cf_account_id||''; $('#cfTokenCurrent').textContent=st.cf_token_set?'（保存済み）':'（未設定）';
   $('#trTokenCurrent').textContent=st.remote_token_set?'（保存済み）':'（未設定）';
   $('#trGlossary').value=st.glossary||''; $('#trChunk').value=st.chunk_sec||45;
   settingsCache=st;
@@ -513,10 +519,11 @@ $('#trSave').onclick=async()=>{
   const fd=new FormData();
   fd.append('transcribe_engine',$('#trEngine').value); fd.append('remote_transcribe_url',$('#trUrl').value);
   if($('#trToken').value.trim()) fd.append('remote_transcribe_token',$('#trToken').value.trim());
+  fd.append('cf_account_id',$('#cfAccount').value); if($('#cfToken').value.trim()) fd.append('cf_api_token',$('#cfToken').value.trim());
   fd.append('glossary',$('#trGlossary').value); fd.append('chunk_sec',$('#trChunk').value);
   const r=await (await fetch('/settings',{method:'POST',body:fd})).json();
   if(!r.ok){ showSet(r.error,'ng'); return; }
-  $('#trToken').value=''; await loadSettings(); showSet('文字起こし設定を保存しました。','ok');
+  $('#trToken').value=''; $('#cfToken').value=''; await loadSettings(); showSet('文字起こし設定を保存しました。','ok');
 };
 $('#openaiSave').onclick=async()=>{
   const fd=new FormData(); fd.append('openai_api_key',$('#openaiKey').value);

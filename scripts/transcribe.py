@@ -4,6 +4,8 @@
   python scripts/transcribe.py <音声ファイル> [--engine openai|whisper] [--model 名前] [--out <出力先.txt>] [--glossary "案件名,人名,用語"]
   python scripts/transcribe.py <既存の文字起こし.txt> --clean-only      文字起こし済みテキストの整形だけ
 エンジン:
+  cloudflare … Cloudflare Workers AI の Whisper large-v3-turbo を REST で直接（無料枠あり）。CF_ACCOUNT_ID と CF_API_TOKEN（画面 ⚙）。
+            ファイルは ffmpeg で 60 秒ごとに分割して送る。
   openai  … OpenAI 音声認識 API（既定 gpt-4o-transcribe）。環境変数 OPENAI_API_KEY（画面 ⚙ の「文字起こし API キー」）が必要。
             25MB を超える音声は ffmpeg で 10 分ごとに分割して順に送る（ffmpeg が PATH にあること）。
   whisper … faster-whisper（ローカル、鍵不要、既定 large-v3）。pip install faster-whisper が必要。初回はモデルを落とす。
@@ -83,12 +85,55 @@ def low_confidence(segments: list[dict]) -> bool:
     return ns > 0.6 or lp < -1.0
 
 
+CF_MODEL = "@cf/openai/whisper-large-v3-turbo"
+
+
+def _engine_fn(engine: str):
+    return {"whisper": _whisper, "cloudflare": _cloudflare}.get(engine, _openai)
+
+
+def _default_model(engine: str) -> str:
+    return {"whisper": "large-v3", "cloudflare": CF_MODEL}.get(engine, os.environ.get("SLINKY_OPENAI_MODEL", "gpt-4o-transcribe"))
+
+
+def _cloudflare(path: Path, model: str, prompt: str | None) -> tuple[str, list[dict]]:
+    """Cloudflare Workers AI の Whisper を REST で直接呼ぶ（無料枠あり、デプロイ不要）。
+    必要: CF_ACCOUNT_ID（ダッシュボード右側の Account ID）と CF_API_TOKEN（API Tokens → テンプレート「Workers AI」）。"""
+    import base64
+    import json
+    import urllib.error
+    import urllib.request
+
+    acct = os.environ.get("CF_ACCOUNT_ID", "").strip()
+    tok = os.environ.get("CF_API_TOKEN", "").strip()
+    if not acct or not tok:
+        raise RuntimeError("Cloudflare のアカウント ID と API トークンがありません。画面左上の ⚙ →「ライブ録音・文字起こしの設定」で保存してください。")
+    body = {"audio": base64.b64encode(path.read_bytes()).decode(), "task": "transcribe", "language": "ja",
+            "vad_filter": True, "beam_size": 5, "condition_on_previous_text": False}
+    if prompt:
+        body["initial_prompt"] = prompt
+    req = urllib.request.Request(f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{model}",
+                                 data=json.dumps(body).encode(), method="POST",
+                                 headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:300]
+        hint = {401: "トークンが無効です", 403: "トークンに Workers AI の権限がありません", 404: "アカウント ID が違います",
+                429: "無料枠の上限です（日が変わると戻ります）"}.get(e.code, "")
+        raise RuntimeError(f"Cloudflare {e.code} {hint}: {detail}") from e
+    if not res.get("success", False):
+        raise RuntimeError(f"Cloudflare エラー: {res.get('errors')}")
+    out = res.get("result") or {}
+    segs = [{"start": sg.get("start", 0) or 0, "end": sg.get("end", 0) or 0, "text": (sg.get("text") or "").strip(),
+             "no_speech_prob": sg.get("no_speech_prob"), "avg_logprob": sg.get("avg_logprob")} for sg in out.get("segments") or []]
+    return (out.get("text") or "").strip(), segs
+
+
 def transcribe_chunk(path: Path, engine: str, model: str | None, prompt: str, start_sec: float = 0.0) -> dict:
     """1 区切りを文字にして {text, segments, dropped} を返す。segments の時刻は会議開始からの秒。"""
-    if engine == "whisper":
-        text, segs = _whisper(path, model or "large-v3", prompt)
-    else:
-        text, segs = _openai(path, model or os.environ.get("SLINKY_OPENAI_MODEL", "gpt-4o-transcribe"), prompt)
+    text, segs = _engine_fn(engine)(path, model or _default_model(engine), prompt)
     text = text.strip()
     if not text or looks_hallucinated(text) or low_confidence(segs):
         return {"text": "", "segments": [], "dropped": text or "(empty)"}
@@ -131,16 +176,16 @@ def _whisper(path: Path, model: str, prompt: str | None) -> tuple[str, list[dict
     return "\n".join(s["text"] for s in segs), segs
 
 
-def split_audio(path: Path) -> list[Path]:
-    """25MB 超なら ffmpeg で 10 分ごとに分割。"""
-    if path.stat().st_size <= MAX_BYTES:
+def split_audio(path: Path, seg_sec: int = 600, always: bool = False) -> list[Path]:
+    """ffmpeg で seg_sec 秒ごとに分割。always=False なら 25MB 以下はそのまま。"""
+    if not always and path.stat().st_size <= MAX_BYTES:
         return [path]
     tmp = Path(tempfile.mkdtemp(prefix="slinky_"))
     out = tmp / f"part_%03d{path.suffix}"
-    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-f", "segment", "-segment_time", "600",
+    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-f", "segment", "-segment_time", str(seg_sec),
                         "-c", "copy", str(out)], capture_output=True, text=True)
     if r.returncode != 0:
-        sys.exit("ERROR: 25MB を超える音声の分割に ffmpeg が必要です（winget install Gyan.FFmpeg）。\n" + r.stderr.strip())
+        sys.exit("ERROR: 音声の分割に ffmpeg が必要です（winget install Gyan.FFmpeg）。\n" + r.stderr.strip())
     parts = sorted(tmp.glob(f"part_*{path.suffix}"))
     if not parts:
         sys.exit("ERROR: 分割結果がありません")
@@ -150,12 +195,11 @@ def split_audio(path: Path) -> list[Path]:
 def transcribe_file(path: Path, engine: str, model: str | None, glossary: str) -> str:
     """ファイル 1 本を文字にする。25MB 超は分割し、前の部分の末尾を次のプロンプトに渡す。"""
     texts, prev = [], ""
-    parts = split_audio(path) if engine == "openai" else [path]
+    # openai: 25MB 超だけ 10 分ごと / cloudflare: 1 リクエストが長いと時間切れになるので常に 60 秒ごと / whisper: 分割不要
+    parts = split_audio(path) if engine == "openai" else split_audio(path, 60, always=True) if engine == "cloudflare" else [path]
     for i, part in enumerate(parts, 1):
         try:
-            fn = _whisper if engine == "whisper" else _openai
-            text, _ = fn(part, model or ("large-v3" if engine == "whisper" else os.environ.get("SLINKY_OPENAI_MODEL", "gpt-4o-transcribe")),
-                         build_prompt(glossary, prev))
+            text, _ = _engine_fn(engine)(part, model or _default_model(engine), build_prompt(glossary, prev))
         except RuntimeError as e:
             sys.exit(f"ERROR: {e}")
         texts.append(text.strip())
@@ -168,7 +212,7 @@ def transcribe_file(path: Path, engine: str, model: str | None, glossary: str) -
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
-    ap.add_argument("--engine", choices=["openai", "whisper"], default=os.environ.get("SLINKY_ENGINE", "openai"))
+    ap.add_argument("--engine", choices=["openai", "whisper", "cloudflare"], default=os.environ.get("SLINKY_ENGINE", "openai"))
     ap.add_argument("--model", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--clean-only", action="store_true")

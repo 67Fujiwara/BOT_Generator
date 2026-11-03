@@ -96,8 +96,13 @@ def _sdk_env() -> dict[str, str]:
         env["OPENAI_API_KEY"] = cfg["openai_api_key"]
     if cfg.get("glossary"):
         env["SLINKY_GLOSSARY"] = cfg["glossary"]
-    if cfg.get("transcribe_engine") in ("openai", "whisper"):
-        env["SLINKY_ENGINE"] = cfg["transcribe_engine"]
+    if cfg.get("cf_account_id") and cfg.get("cf_api_token"):   # Cloudflare Workers AI（無料枠）
+        env["CF_ACCOUNT_ID"], env["CF_API_TOKEN"] = cfg["cf_account_id"], cfg["cf_api_token"]
+    eng = cfg.get("transcribe_engine", "auto")
+    if eng == "auto":
+        eng = "cloudflare" if cfg.get("cf_api_token") else "openai" if cfg.get("openai_api_key") else "whisper"
+    if eng in ("openai", "whisper", "cloudflare"):
+        env["SLINKY_ENGINE"] = eng
     key = cfg.get("api_key", "")
     if key:
         CLAUDE_HOME.mkdir(parents=True, exist_ok=True)
@@ -236,6 +241,8 @@ def _engine_for_chunks(cfg: dict) -> str:
         return e
     if cfg.get("remote_transcribe_url"):
         return "remote"
+    if cfg.get("cf_account_id") and cfg.get("cf_api_token"):
+        return "cloudflare"
     return "openai" if cfg.get("openai_api_key") else "whisper"
 
 
@@ -275,6 +282,8 @@ async def transcribe_chunk(audio: UploadFile = File(...), seq: int = Form(0), st
         prompt = tr.build_prompt(glossary or cfg.get("glossary", ""), prev)
         if engine == "openai" and cfg.get("openai_api_key"):
             os.environ["OPENAI_API_KEY"] = cfg["openai_api_key"]
+        if engine == "cloudflare":
+            os.environ["CF_ACCOUNT_ID"], os.environ["CF_API_TOKEN"] = cfg.get("cf_account_id", ""), cfg.get("cf_api_token", "")
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, functools.partial(tr.transcribe_chunk, path, engine, None, prompt, startSec))
         return {**base, **res}
@@ -316,6 +325,8 @@ def get_settings():
         "openai_key_set": bool(okey),
         "openai_key_hint": f"…{okey[-4:]}" if okey else "",
         "transcribe_engine": cfg.get("transcribe_engine", "auto"),
+        "cf_account_id": cfg.get("cf_account_id", ""),
+        "cf_token_set": bool(cfg.get("cf_api_token")),
         "remote_transcribe_url": cfg.get("remote_transcribe_url", ""),
         "remote_token_set": bool(rtok),
         "glossary": cfg.get("glossary", ""),
@@ -328,11 +339,20 @@ def get_settings():
 @app.post("/settings")
 def set_settings(api_key: str = Form(None), openai_api_key: str = Form(None),
                  transcribe_engine: str = Form(None), remote_transcribe_url: str = Form(None),
-                 remote_transcribe_token: str = Form(None), glossary: str = Form(None), chunk_sec: str = Form(None)):
+                 remote_transcribe_token: str = Form(None), glossary: str = Form(None), chunk_sec: str = Form(None),
+                 cf_account_id: str = Form(None), cf_api_token: str = Form(None)):
     """送られてきた項目だけ更新する。空文字は削除。"""
     cfg = _load_config()
+    if cf_account_id is not None:
+        cfg["cf_account_id"] = cf_account_id.strip()
+    if cf_api_token is not None:
+        tok = cf_api_token.strip()
+        if tok:
+            cfg["cf_api_token"] = tok
+        elif cf_api_token == "":
+            cfg.pop("cf_api_token", None)
     if transcribe_engine is not None:
-        if transcribe_engine not in ("auto", "openai", "whisper", "remote"):
+        if transcribe_engine not in ("auto", "openai", "whisper", "remote", "cloudflare"):
             return {"ok": False, "error": "エンジンの指定が不正です"}
         cfg["transcribe_engine"] = transcribe_engine
     if remote_transcribe_url is not None:

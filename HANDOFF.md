@@ -67,7 +67,7 @@ bot-team/
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , /samples/{bot} , /version ,
                           POST /chat (SSE) , /settings , /settings/test , /samples/{bot} , /transcribe/chunk , /transcribe/finish , /shutdown , DELETE /samples/{bot}
-                          config.json: api_key, openai_api_key, transcribe_engine(auto|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
+                          config.json: api_key, openai_api_key, cf_account_id, cf_api_token, transcribe_engine(auto|cloudflare|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
                           フロントマター record: true のボット（スリンキー）では 🎙 でライブ録音: マイク＋任意でタブ音声を AudioContext で合成、
@@ -120,7 +120,8 @@ bot-team/
    Python 3.10 以上を用意（3.8 では `claude-agent-sdk` が見つからず pip が失敗する。pyenv-win なら `pyenv install --list` に出る最新の 3.12.x を `pyenv install` → リポジトリ内で `pyenv local 3.12.x`。2026-11-03 時点の一覧は 3.12.8 まで）→ `pip install -r requirements.txt` → `run.bat` → ハムに1文投げて SDK 接続を通す。エラーが出たら server.py の SDK 呼び出し部分を直す。
 2. 本物の見積PDF・発注書Excelでポテトを走らせ、`--show-columns` で列判定を確認し、`COL_GUESS` に候補を足す。
 3. ~~`tests/` にサンプル入力と期待レポートを置き、検証役ボット（verifier）を追加して全テストを回させる。~~ 2026-11-03 完了（バズ）。ボットやスクリプトを足したら `tests/cases.json` にケースを足す。
-- **SYNAPSE を外部サーバーとして使う場合**: `docs/synapse/README.md` の手順で `worker/minutes.ts` を SYNAPSE に足して `npm run deploy`（このセッションからは SYNAPSE への push 権限が無く、ファイルと手順だけ用意した）。トークンは SYNAPSE の `APP_TOKEN`。既存の `/api/transcribe` は英語専用なので流用不可。
+- **採用エンジン（2026-11-03 決定）: Cloudflare Workers AI の Whisper を REST で直接**（`scripts/transcribe.py` の `_cloudflare`、`CF_ACCOUNT_ID` / `CF_API_TOKEN` は ⚙ から）。SYNAPSE 経由も OpenAI も不要。ファイル入力のときは ffmpeg で 60 秒ごとに分割して送る。このセッションからは api.cloudflare.com に出られず、リクエストの形と応答の解釈・エラー文のみ疑似応答で確認済み。実機で最初の 1 回を見ること（401=トークン、403=権限、404=アカウント ID、429=無料枠）。
+- **SYNAPSE を外部サーバーとして使う場合**（採用せず、手順だけ残す）: `docs/synapse/README.md` の手順で `worker/minutes.ts` を SYNAPSE に足して `npm run deploy`（このセッションからは SYNAPSE への push 権限が無く、ファイルと手順だけ用意した）。トークンは SYNAPSE の `APP_TOKEN`。既存の `/api/transcribe` は英語専用なので流用不可。
 - **スリンキー ライブ録音: 実機・実エンジンで未検証**（この環境はエンジン応答をスタブにしてブラウザの流れだけ確認）。初回は ⚙ でエンジンと用語を入れ、短い会議で試す。タブ音声は Chrome/Edge で「タブの音声を共有」を有効にすること。
 - **スリンキー: 実際の録音で未検証**（この環境に OpenAI キーなし）。整形と鍵なし時のエラー文だけ確認済み。最初の1回は短い録音で `python scripts/transcribe.py <音声>` を手で回し、文字起こし精度とフィラー除去のやり過ぎ（`FILLERS_BOUNDED` の「はい」「ね」など）を見る。エンジン候補は中立ベンチマークが無いので実音声で比較して決める。
 4. ボット階層の本体（lead / worker / verifier）に着手。最初は「リード1・ワーカー2・検証1」の小さい構成から。
