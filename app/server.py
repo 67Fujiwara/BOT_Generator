@@ -49,6 +49,7 @@ _hide_child_windows()
 INBOX = ROOT / "inbox"
 SAMPLES = ROOT / "samples"                  # ボットごとの参考サンプル（samples/<bot>/<ラベル>/）。git 対象外
 AGENTS_DIR = ROOT / ".claude" / "agents"
+BOT_RULES = ROOT / ".claude" / "bot_rules.md"   # 全ボット共通ルール。直接呼びのシステムプロンプト末尾に足す
 HOST, PORT = "127.0.0.1", 8765
 CODE_STAMP = f"{os.path.getmtime(__file__):.0f}-{os.path.getsize(__file__)}"   # 起動時のコードの印。古い常駐を見分ける
 
@@ -313,8 +314,11 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                 # 直接呼び: ボット定義の本文をシステムプロンプトに、ツールとモデルも定義どおり。
                 # ツールなしのボットは Claude Code の既定プロンプトも外して文章だけ返す。
                 tools = agent["tools"]
-                sys_prompt = ({"type": "preset", "preset": "claude_code", "append": agent["body"]}
-                              if tools else agent["body"])
+                body = agent["body"]
+                if BOT_RULES.exists():
+                    body += "\n\n" + BOT_RULES.read_text(encoding="utf-8").strip()
+                sys_prompt = ({"type": "preset", "preset": "claude_code", "append": body}
+                              if tools else body)
                 opts = ClaudeAgentOptions(
                     cwd=str(ROOT),
                     system_prompt=sys_prompt,
