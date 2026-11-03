@@ -11,3 +11,4 @@ app/server.log
 samples/*
 !samples/.gitkeep
 app/claude_home/
+tests/fixtures/

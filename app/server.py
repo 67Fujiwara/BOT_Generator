@@ -89,11 +89,15 @@ def _sdk_env() -> dict[str, str]:
     """画面で保存した API キーがあれば、環境変数より優先して Claude Code に渡す。
     そのときは CLAUDE_CONFIG_DIR をアプリ専用にして、~/.claude にある Claude.ai のログイン
     （期限切れだと "OAuth session expired" になる）を Claude Code が見に行かないようにする。"""
-    key = _load_config().get("api_key", "")
-    if not key:
-        return {}
-    CLAUDE_HOME.mkdir(parents=True, exist_ok=True)
-    return {"ANTHROPIC_API_KEY": key, "CLAUDE_CONFIG_DIR": str(CLAUDE_HOME)}
+    cfg = _load_config()
+    env = {}
+    if cfg.get("openai_api_key"):                 # スリンキーの文字起こし用（scripts/transcribe.py が読む）
+        env["OPENAI_API_KEY"] = cfg["openai_api_key"]
+    key = cfg.get("api_key", "")
+    if key:
+        CLAUDE_HOME.mkdir(parents=True, exist_ok=True)
+        env.update({"ANTHROPIC_API_KEY": key, "CLAUDE_CONFIG_DIR": str(CLAUDE_HOME)})
+    return env
 
 
 def _auth_hint(text: str) -> str:
@@ -109,7 +113,7 @@ def _front(path: Path) -> dict:
     txt = path.read_text(encoding="utf-8")
     head = txt.split("---")[1] if txt.startswith("---") else ""
     out = {}
-    for key in ("name", "description", "model", "group", "color"):
+    for key in ("name", "description", "model", "group", "color", "shape"):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
@@ -161,7 +165,9 @@ def list_bots() -> list[dict]:
             "id": bid, "nick": nick, "file": p.name,
             "desc": d.split("。", 1)[1].strip() if "。" in d else d,
             "group": f.get("group", "未分類"), "model": f.get("model", "既定"),
-            "tools": f["tools"], "samples": f["samples"], "color": f.get("color", PALETTE[i % len(PALETTE)]),
+            "tools": f["tools"], "samples": f["samples"],
+            "color": f.get("color", PALETTE[sum(bid.encode()) % len(PALETTE)]),   # 既定色は id から決める（ファイルが増えても変わらない）
+            "shape": f.get("shape", ""),
             "preview": (last.get("text") or "")[:60].replace("\n", " "),
             "status": "",
         })
@@ -232,25 +238,37 @@ def shutdown():
 
 @app.get("/settings")
 def get_settings():
-    key = _load_config().get("api_key", "")
+    cfg = _load_config()
+    key = cfg.get("api_key", "")
+    okey = cfg.get("openai_api_key", "")
     return {
         "api_key_set": bool(key),
         "api_key_hint": f"…{key[-4:]}" if key else "",
+        "openai_key_set": bool(okey),
+        "openai_key_hint": f"…{okey[-4:]}" if okey else "",
         "env_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "config_file": str(CONFIG.relative_to(ROOT)),
     }
 
 
 @app.post("/settings")
-def set_settings(api_key: str = Form("")):
-    key = api_key.strip().strip('"').strip("'")
+def set_settings(api_key: str = Form(None), openai_api_key: str = Form(None)):
+    """送られてきた項目だけ更新する。空文字は削除。"""
     cfg = _load_config()
-    if key:
-        if not key.startswith("sk-ant-"):
-            return {"ok": False, "error": "API キーは sk-ant- で始まります。コピーし直してください。"}
+    if api_key is not None:
+        key = api_key.strip().strip('"').strip("'")
+        if key and not key.startswith("sk-ant-"):
+            return {"ok": False, "error": "Anthropic の API キーは sk-ant- で始まります。コピーし直してください。"}
         cfg["api_key"] = key
-    else:
-        cfg.pop("api_key", None)
+        if not key:
+            cfg.pop("api_key", None)
+    if openai_api_key is not None:
+        okey = openai_api_key.strip().strip('"').strip("'")
+        if okey and not okey.startswith("sk-"):
+            return {"ok": False, "error": "OpenAI の API キーは sk- で始まります。コピーし直してください。"}
+        cfg["openai_api_key"] = okey
+        if not okey:
+            cfg.pop("openai_api_key", None)
     _save_config(cfg)
     return {"ok": True, **get_settings()}
 

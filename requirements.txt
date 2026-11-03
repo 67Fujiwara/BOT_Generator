@@ -5,3 +5,4 @@ fastapi
 uvicorn
 python-multipart
 claude-agent-sdk
+openai

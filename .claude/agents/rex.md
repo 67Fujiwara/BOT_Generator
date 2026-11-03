@@ -6,6 +6,7 @@ tools:
   - Bash
   - Glob
 model: sonnet
+color: "#8AB4F8"
 group: 購買・リスト
 samples:
   - BOM
