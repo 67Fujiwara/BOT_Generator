@@ -150,7 +150,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <div class="attached" id="attached"></div>
     <div class="row">
       <button class="icon-btn" id="pick" title="ファイルを選ぶ" style="border:0">＋</button>
-      <textarea id="input" rows="1" placeholder="メッセージ（ファイルは画面のどこにでもドロップ）"></textarea>
+      <textarea id="input" rows="1" placeholder="メッセージ（Enter で送信、Shift+Enter で改行。ファイルは画面のどこにでもドロップ）"></textarea>
       <button class="send" id="send">送信</button>
     </div>
     <input type="file" id="file" multiple hidden>
@@ -172,6 +172,11 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <dialog class="settings" id="settings">
   <h2>設定</h2>
   <p id="setCurrent">読み込み中…</p>
+  <label for="sendKey">送信キー</label>
+  <select id="sendKey" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
+    <option value="enter">Enter で送信（Shift+Enter で改行）</option>
+    <option value="ctrl">Ctrl+Enter で送信（Enter で改行）</option>
+  </select>
   <label for="apiKey">Anthropic API キー</label>
   <input id="apiKey" type="password" placeholder="sk-ant-api03-…" autocomplete="off" spellcheck="false">
   <p>キーは <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a> の API Keys で作れます。保存先はこの PC の <span class="mono" id="setFile">app/config.json</span> で、git には入りません。</p>
@@ -265,7 +270,7 @@ async function select(b){
   $('#topAvatar').outerHTML=avatar(b,'avatar','topAvatar'); $('#topName').textContent=b.nick;
   log.innerHTML=''; statusEl.innerHTML='';
   const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
-  if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>Enter で送信、Shift+Enter で改行</div>`;
+  if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
   hist.forEach(m=>m.role==='me'?append('msg me',esc(m.text)+fileChips(m.files)):append('msg bot-msg',md(m.text)));
   input.focus();
 }
@@ -350,7 +355,20 @@ async function send(){
 }
 
 sendBtn.onclick=send;
-input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();} });
+/* 送信キー: 設定で切替（ブラウザに記憶）。IME 変換確定の Enter では送らない */
+let sendKey='enter'; try{ sendKey=localStorage.getItem('sendKey')||'enter'; }catch(e){}
+function applySendKey(){
+  const hint = sendKey==='ctrl' ? 'Ctrl+Enter で送信、Enter で改行' : 'Enter で送信、Shift+Enter で改行';
+  input.placeholder=`メッセージ（${hint}。ファイルは画面のどこにでもドロップ）`;
+  document.querySelectorAll('.empty').forEach(el=>{ el.innerHTML=el.innerHTML.replace(/(Enter で送信、Shift\+Enter で改行|Ctrl\+Enter で送信、Enter で改行)/, hint); });
+}
+input.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'||e.isComposing) return;
+  const fire = sendKey==='ctrl' ? (e.ctrlKey||e.metaKey) : (!e.shiftKey&&!e.ctrlKey&&!e.metaKey);
+  if(fire){ e.preventDefault(); send(); }
+});
+$('#sendKey').onchange=e=>{ sendKey=e.target.value; try{ localStorage.setItem('sendKey',sendKey); }catch(e2){} applySendKey(); };
+$('#sendKey').value=sendKey; applySendKey();
 input.addEventListener('input',()=>{input.style.height='';input.style.height=Math.min(input.scrollHeight,220)+'px';});
 $('#filter').addEventListener('input',renderList);
 $('#pick').onclick=()=>$('#file').click();

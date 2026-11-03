@@ -62,7 +62,7 @@ bot-team/
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , POST /chat (SSE) , /settings , /settings/test , /shutdown
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
-                          画面どこでもドロップ、＋ボタン、貼り付け。Enter送信、Shift+Enter改行
+                          画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
   inbox/                  ドロップしたファイルの保存先（git 対象外）
   samples/<bot>/<ラベル>/  ボットごとの参考サンプル（git 対象外。右パネルから追加・削除。フロントマター samples: で枠を定義）
   tests/                  まだ空。サンプル入力→期待レポートを置く予定
