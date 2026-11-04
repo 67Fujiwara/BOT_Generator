@@ -219,5 +219,18 @@
     "contains": [
       "解析できません"
     ]
+  },
+  {
+    "name": "alien-マニュアル付き検図",
+    "cmd": "python scripts/check_drawing.py {fx}/drawing.pdf --manual {fx}/drawing.pdf --out {fx}/drawing_検図m",
+    "exit": 1,
+    "contains": [
+      "# マニュアル（検図の規定として優先する）",
+      "## マニュアル: drawing.pdf（2 ページ",
+      "=== p.1 ===",
+      "KM-2",
+      "# 検図",
+      "[表記ゆれ]"
+    ]
   }
 ]

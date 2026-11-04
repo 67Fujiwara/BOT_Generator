@@ -2,7 +2,9 @@
 ページを画像にし、文字と座標を抜いて決定的なチェックをかけ、指摘ごとに赤枠付きの切り抜き画像と report.md を作る。
 
 使い方:
-  python scripts/check_drawing.py <図面.pdf> [--out <出力フォルダ>] [--dpi 110]
+  python scripts/check_drawing.py <図面.pdf> [--manual <マニュアル.pdf|フォルダ> ...] [--out <出力フォルダ>] [--dpi 110]
+      --manual を付けると、先にマニュアル（PDF / txt / md）の本文をページ番号付きで出力する（検図の規定として読む用）。
+      PDF は抽出した本文を同じ場所に <名前>.txt でキャッシュする（元 PDF より新しければ再利用）。
   python scripts/check_drawing.py crop <図面.pdf> <ページ番号> --text "KM1" [--out <フォルダ>] [--label "指摘"]
   python scripts/check_drawing.py crop <図面.pdf> <ページ番号> --region 0.6,0.7,0.9,0.95 [--out …]   （左上 x,y と右下 x,y をページ幅・高さの割合で）
 出力（<図面名>_検図/）:
@@ -155,6 +157,58 @@ def analyze(pdf_path: Path, out: Path, dpi: int) -> dict:
     return {"pages": [p.name for p in pages], "findings": findings, "out": str(out)}
 
 
+MANUAL_CHARS = 60000   # マニュアル本文の出力上限（超えた分は .txt を Read するよう案内）
+
+
+def manual_text(path: Path) -> str:
+    """マニュアルの本文（ページ番号付き）。PDF は .txt にキャッシュ。"""
+    if path.suffix.lower() in (".txt", ".md"):
+        return path.read_text(encoding="utf-8", errors="replace")
+    cache = path.with_suffix(path.suffix + ".txt")
+    if cache.exists() and cache.stat().st_mtime >= path.stat().st_mtime:
+        return cache.read_text(encoding="utf-8", errors="replace")
+    parts = []
+    with pdfplumber.open(str(path)) as pdf:
+        for i, page in enumerate(pdf.pages, 1):
+            t = (page.extract_text() or "").strip()
+            parts.append(f"=== p.{i} ===\n{t if t else '（文字なし: 画像ページ）'}")
+    text = "\n".join(parts)
+    cache.write_text(text, encoding="utf-8")
+    return text
+
+
+def print_manuals(paths: list[str]):
+    files = []
+    for p in paths:
+        pp = Path(p)
+        if pp.is_dir():
+            files += sorted(x for x in pp.iterdir() if x.suffix.lower() in (".pdf", ".txt", ".md") and not x.name.endswith(".pdf.txt"))
+        elif pp.exists():
+            files.append(pp)
+        else:
+            print(f"（マニュアルが見つかりません: {p}）")
+    if not files:
+        print("（マニュアルなし）")
+        return
+    budget = MANUAL_CHARS
+    for f in files:
+        try:
+            text = manual_text(f)
+        except Exception as e:  # noqa: BLE001
+            print(f"## マニュアル: {f.name} → 読めません（{type(e).__name__}: {e}）")
+            continue
+        pages = text.count("=== p.") or 1
+        print(f"## マニュアル: {f.name}（{pages} ページ、{len(text)} 文字）")
+        if len(text) > budget:
+            cache = f if f.suffix.lower() in (".txt", ".md") else f.with_suffix(f.suffix + ".txt")
+            print(text[:budget] + f"\n…（以下省略。全文は {cache} を Read）")
+            budget = 0
+        else:
+            print(text)
+            budget -= len(text)
+        print()
+
+
 def main():
     argv = sys.argv[1:]
     if argv and argv[0] == "crop":
@@ -183,10 +237,15 @@ def main():
         return
     ap = argparse.ArgumentParser()
     ap.add_argument("pdf"); ap.add_argument("--out"); ap.add_argument("--dpi", type=int, default=110)
+    ap.add_argument("--manual", nargs="*", default=[], help="マニュアル PDF/txt/md かそのフォルダ。先に本文を出力する")
     a = ap.parse_args(argv)
     pdf_path = Path(a.pdf)
     if not pdf_path.exists():
         die(f"ERROR: ファイルがありません: {pdf_path}")
+    if a.manual:
+        print("# マニュアル（検図の規定として優先する）")
+        print_manuals(a.manual)
+        print("# 検図")
     out = Path(a.out) if a.out else pdf_path.with_name(pdf_path.stem + "_検図")
     try:
         r = analyze(pdf_path, out, a.dpi)

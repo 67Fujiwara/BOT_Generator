@@ -151,7 +151,8 @@ def list_samples(bot_id: str, labels: list[str]) -> dict[str, list[str]]:
     if base.is_dir():
         for d in sorted(p for p in base.iterdir() if p.is_dir()):
             out.setdefault(d.name, [])
-            out[d.name] = [str(p.relative_to(ROOT)) for p in sorted(d.iterdir()) if p.is_file() and not p.name.startswith(".")]
+            out[d.name] = [str(p.relative_to(ROOT)) for p in sorted(d.iterdir())
+                           if p.is_file() and not p.name.startswith(".") and not p.name.endswith(".pdf.txt")]   # .pdf.txt は抽出キャッシュ
     if not out:
         out["サンプル"] = []
     return out

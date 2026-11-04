@@ -62,6 +62,7 @@ bot-team/
     check_drawing.py      エイリアン用。pdfplumber で文字＋座標、page.to_image で画像化。TAG_RE（機器符号）/ WIRE_RE（線番）/ PAGE_RE（n/N）/ DWG_RE（図番）
                           で表記ゆれ・孤立符号・孤立線番・ページ欠け・図番不一致・文字なしを検出し、find-NN.png（赤枠）と report.md を出す。crop サブコマンドで目視箇所の切り抜き
                           符号の正規表現は一般的な略号で仮置き。実図面で見直す。終了コード 0/1/2
+                          --manual <pdf|txt|md|フォルダ> で先にマニュアル本文（ページ番号付き、60k 字まで、.pdf.txt にキャッシュ）を出力。エイリアンは samples/alien/マニュアル を毎回渡す
     tasks.py              ジェシー用。app/tasks.json に登録/完了/一覧。parse_due() が「すぐ/今週中/今月中旬/11/20/金曜/3日後/なし」を
                           due_start〜due_end に変換（解釈不能は終了コード 3）。status() が 期限切れ/すぐ/今日まで/期間内/予定/納期なし。--store で保存先差し替え（テスト用）
     check_lists.py        上2つをまとめて実行（抽出×2→比較→レポート標準出力）。ポテトはこれを1回の Bash で呼ぶ
