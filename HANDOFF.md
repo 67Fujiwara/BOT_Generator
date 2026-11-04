@@ -26,6 +26,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 |---|---|---|---|---|
 | ポテト | potato | 2つのリスト（BOM / 購買リスト / 正式見積PDF / 発注書Excel）を突き合わせ、漏れ・余分・数量不一致・単価不一致・金額合計差を報告 | Read, Bash, Glob | 購買・リスト |
 | レックス | rex | 購買の相見積もりスコア(Excel)から商社ごとの金額を拾い、BOM(Excel)に転記した `<BOM名>_見積.xlsx` を作る。右端に商社ごとの単価・金額列。型式不一致は空欄＋要確認 | Read, Bash, Glob | 購買・リスト |
+| エイリアン | alien | 電気図面 PDF の検図。`check_drawing.py` で決定的チェック＋切り抜き画像、ページ画像を目視、指摘を画像付きで返す | Bash, Read, Glob | 設計 |
 | ジェシー | jessie | タスク管理。文から仕事と納期を拾って `tasks.py` で登録、納期なしは聞き返す。右パネル「タスク」タブにチェックボックスで常設、期限で催促ポップアップ | Bash | 管理 |
 | バズ | buzz | 検証役。`tests/run_tests.py` を1回の Bash で回して PASS/FAIL を報告。直さない | Bash, Read, Glob | 検証 |
 | スリンキー | slinky | 録音/文字起こし → `transcribe.py`（文字起こし＋フィラー除去）→ 議事録 md（決定事項/ToDo/論点）。日時・参加者が不明なら1回聞く | Bash, Read, Glob, Write | 文章 |
@@ -41,7 +42,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 bot-team/
   CLAUDE.md               プロジェクト説明（各ボットの呼び方、共通ルール、入口の説明）
   HANDOFF.md              このファイル
-  .claude/agents/         potato.md  ham.md  rex.md  buzz.md  slinky.md  jessie.md
+  .claude/agents/         potato.md  ham.md  rex.md  buzz.md  slinky.md  jessie.md  alien.md
   .claude/bot_rules.md    全ボット共通ルール（足りない情報は先に聞く）。server.py が毎回システムプロンプトに追記
   scripts/
     extract_items.py      PDF/Excel/CSV → 標準CSV（型式,型式KEY,品名,数量,単価,金額,メーカ,備考）
@@ -58,6 +59,9 @@ bot-team/
     transcribe.py         スリンキー用。音声→文字起こし（openai: gpt-4o-transcribe / whisper: faster-whisper large-v3）→ clean() でフィラー・言い直し除去
                           build_prompt(用語, 直前末尾) / looks_hallucinated / low_confidence / transcribe_chunk を server.py の /transcribe/chunk も使う
                           .txt を渡せば整形だけ。25MB 超は ffmpeg で 10 分分割。OPENAI_API_KEY は ⚙ の「文字起こし API キー」→ _sdk_env() で渡す
+    check_drawing.py      エイリアン用。pdfplumber で文字＋座標、page.to_image で画像化。TAG_RE（機器符号）/ WIRE_RE（線番）/ PAGE_RE（n/N）/ DWG_RE（図番）
+                          で表記ゆれ・孤立符号・孤立線番・ページ欠け・図番不一致・文字なしを検出し、find-NN.png（赤枠）と report.md を出す。crop サブコマンドで目視箇所の切り抜き
+                          符号の正規表現は一般的な略号で仮置き。実図面で見直す。終了コード 0/1/2
     tasks.py              ジェシー用。app/tasks.json に登録/完了/一覧。parse_due() が「すぐ/今週中/今月中旬/11/20/金曜/3日後/なし」を
                           due_start〜due_end に変換（解釈不能は終了コード 3）。status() が 期限切れ/すぐ/今日まで/期間内/予定/納期なし。--store で保存先差し替え（テスト用）
     check_lists.py        上2つをまとめて実行（抽出×2→比較→レポート標準出力）。ポテトはこれを1回の Bash で呼ぶ
@@ -71,6 +75,7 @@ bot-team/
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , /samples/{bot} , /version ,
                           POST /chat (SSE) , /settings , /settings/test , /samples/{bot} , /transcribe/chunk , /transcribe/finish , /shutdown , DELETE /samples/{bot}
                           GET/POST /tasks , POST /tasks/{id}/(done|undone|remove|reminded|snooze|due)
+                          静的配信: /static , /files/inbox , /files/samples（ボットが作った画像をチャットに出す用。config.json などは公開しない）
                           config.json: api_key, openai_api_key, cf_account_id, cf_api_token, transcribe_engine(auto|cloudflare|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
@@ -111,6 +116,7 @@ bot-team/
 | ハム（旧ポーク）直接（haiku） | 3.8〜3.9 s | 整えた文だけ返る |
 | ハム（旧ポーク）直接（sonnet） | 2.5 s | 1回のみの計測。haiku と大差なし |
 | レックス直接（sonnet） | 10.8 s | 合成 BOM＋スコアで Bash 1回（fill_prices.py）。このクラウド環境での計測 |
+| エイリアン直接（sonnet） | 25.0 s | 合成 2 ページ PDF。Bash 1 回＋Glob＋ページ画像 Read 2 回。指摘 5 件を画像付きで返した |
 | ジェシー直接（sonnet） | 22.8 s / 6.4 s | 2 件のうち納期なしの 1 件を聞き返し＋1 件登録 / 答えを受けて登録。Bash 1 回ずつ |
 | バズ直接（haiku） | 16.5 s | 8 ケースを Bash 1回で実行。大半はスクリプト実行時間（pandas 起動×8） |
 | ポテト直接（sonnet） | 未計測 | 2026-11-03 に Bash 往復を 3〜4 回 → 1 回（check_lists.py）に削減。実ファイルで計測して埋める |
@@ -128,6 +134,7 @@ bot-team/
 3. ~~`tests/` にサンプル入力と期待レポートを置き、検証役ボット（verifier）を追加して全テストを回させる。~~ 2026-11-03 完了（バズ）。ボットやスクリプトを足したら `tests/cases.json` にケースを足す。
 - **採用エンジン（2026-11-03 決定）: Cloudflare Workers AI の Whisper を REST で直接**（`scripts/transcribe.py` の `_cloudflare`、`CF_ACCOUNT_ID` / `CF_API_TOKEN` は ⚙ から）。SYNAPSE 経由も OpenAI も不要。ファイル入力のときは ffmpeg で 60 秒ごとに分割して送る。このセッションからは api.cloudflare.com に出られず、リクエストの形と応答の解釈・エラー文のみ疑似応答で確認済み。実機で最初の 1 回を見ること（401=トークン、403=権限、404=アカウント ID、429=無料枠）。
 - **SYNAPSE を外部サーバーとして使う場合**（採用せず、手順だけ残す）: `docs/synapse/README.md` の手順で `worker/minutes.ts` を SYNAPSE に足して `npm run deploy`（このセッションからは SYNAPSE への push 権限が無く、ファイルと手順だけ用意した）。トークンは SYNAPSE の `APP_TOKEN`。既存の `/api/transcribe` は英語専用なので流用不可。
+- **エイリアン: 実図面で未検証**（合成 PDF のみ）。最初の実図面で `TAG_RE`（符号の略号）、`DWG_RE`（図番の形）、タイトル欄の位置（右下 25%）を合わせる。孤立線番は誤検出が多い想定なので件数が多ければ閾値や範囲を絞る。CAD からの PDF は文字が取れる前提。スキャンは「文字なし」扱い。
 - **スリンキー ライブ録音: 実機・実エンジンで未検証**（この環境はエンジン応答をスタブにしてブラウザの流れだけ確認）。初回は ⚙ でエンジンと用語を入れ、短い会議で試す。タブ音声は Chrome/Edge で「タブの音声を共有」を有効にすること。
 - **スリンキー: 実際の録音で未検証**（この環境に OpenAI キーなし）。整形と鍵なし時のエラー文だけ確認済み。最初の1回は短い録音で `python scripts/transcribe.py <音声>` を手で回し、文字起こし精度とフィラー除去のやり過ぎ（`FILLERS_BOUNDED` の「はい」「ね」など）を見る。エンジン候補は中立ベンチマークが無いので実音声で比較して決める。
 4. ボット階層の本体（lead / worker / verifier）に着手。最初は「リード1・ワーカー2・検証1」の小さい構成から。

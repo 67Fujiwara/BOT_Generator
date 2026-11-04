@@ -174,5 +174,50 @@
     "contains": [
       "該当なし"
     ]
+  },
+  {
+    "name": "alien-検図の指摘",
+    "cmd": "python scripts/check_drawing.py {fx}/drawing.pdf --out {fx}/drawing_検図",
+    "exit": 1,
+    "contains": [
+      "[表記ゆれ]",
+      "KM-2 / KM2",
+      "[孤立符号] p.2 X001",
+      "[孤立線番] p.1 205",
+      "[ページ欠け]",
+      "ページ番号 2 が見当たらない",
+      "[図番不一致]",
+      "find-01.png",
+      "page-02.png"
+    ],
+    "not_contains": [
+      "[孤立符号] p.1 KM1",
+      "[孤立線番] p.1 101"
+    ]
+  },
+  {
+    "name": "alien-切り抜き（文字指定）",
+    "cmd": "python scripts/check_drawing.py crop {fx}/drawing.pdf 2 --text X001 --out {fx}/drawing_検図",
+    "exit": 0,
+    "contains": [
+      "OK:",
+      "find-"
+    ]
+  },
+  {
+    "name": "alien-切り抜き（領域指定）",
+    "cmd": "python scripts/check_drawing.py crop {fx}/drawing.pdf 1 --region 0.6,0.85,0.95,0.98 --out {fx}/drawing_検図",
+    "exit": 0,
+    "contains": [
+      "OK:"
+    ]
+  },
+  {
+    "name": "alien-PDF以外は失敗",
+    "cmd": "python scripts/check_drawing.py {fx}/bom.xlsx --out {fx}/x_検図",
+    "exit": 2,
+    "contains": [
+      "解析できません"
+    ]
   }
 ]

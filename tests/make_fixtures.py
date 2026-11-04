@@ -8,6 +8,34 @@ import pandas as pd
 OUT = Path(__file__).resolve().parent / "fixtures"
 
 
+def write_pdf(path: Path, pages: list[list[tuple[int, int, str]]]):
+    """依存なしの最小 PDF 書き出し（Helvetica、ASCII のみ）。検図テスト用。"""
+    objs = []  # (num, body bytes)
+    font_num = 3 + 2 * len(pages)
+    page_nums = []
+    for i, items in enumerate(pages):
+        content = "BT /F1 12 Tf " + " ".join(f"1 0 0 1 {x} {y} Tm ({t}) Tj" for x, y, t in items) + " ET"
+        cnum, pnum = 3 + 2 * i, 4 + 2 * i
+        objs.append((cnum, f"<< /Length {len(content)} >>\nstream\n{content}\nendstream".encode()))
+        objs.append((pnum, f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents {cnum} 0 R /Resources << /Font << /F1 {font_num} 0 R >> >> >>".encode()))
+        page_nums.append(pnum)
+    objs.append((font_num, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"))
+    objs.insert(0, (2, f"<< /Type /Pages /Kids [{' '.join(f'{n} 0 R' for n in page_nums)}] /Count {len(pages)} >>".encode()))
+    objs.insert(0, (1, b"<< /Type /Catalog /Pages 2 0 R >>"))
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = {}
+    for num, body in sorted(objs):
+        offsets[num] = len(out)
+        out += f"{num} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    n = max(offsets) + 1
+    out += f"xref\n0 {n}\n0000000000 65535 f \n".encode()
+    for k in range(1, n):
+        out += f"{offsets[k]:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {n} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    path.write_bytes(bytes(out))
+
+
 def main():
     OUT.mkdir(exist_ok=True)
     # ポテト用: BOM(Excel) と 発注書(CSV、列名違い・小計行・全角型式)
@@ -41,6 +69,13 @@ def main():
         "えー、その その 納期は、うーん、11月20日で、はい、確定しました。\n"
         "あのー、担当は藤原さんで、えっとー、発注書は、なんか、PDF で送ります。\n", encoding="utf-8")
     (OUT / "tasks.json").write_text("[]", encoding="utf-8")   # ジェシー用: 空のタスク置き場
+    write_pdf(OUT / "drawing.pdf", [
+        # p.1: KM1 twice (ok), KM-2 vs KM2 (表記ゆれ), wire 101 twice (ok), wire 205 once (孤立線番), page "1/3", dwg no E-1001
+        [(60, 700, "KM1"), (300, 700, "KM1"), (60, 650, "KM-2"), (300, 650, "KM2"), (60, 600, "101"), (300, 600, "101"),
+         (60, 550, "205"), (420, 80, "E-1001"), (500, 60, "1/3")],
+        # p.2: X001 once (孤立符号), page "3/3" (2/3 missing), dwg no E-1002 (図番不一致)
+        [(60, 700, "X001"), (60, 650, "PB1"), (300, 650, "PB1"), (420, 80, "E-1002"), (500, 60, "3/3")],
+    ])
     print(f"fixtures → {OUT}", file=sys.stderr)
 
 

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bot-team</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="/static/vendor/marked.min.js"></script><!-- marked v12.0.2 (MIT) を同梱: 社内ネットワークで CDN が塞がれていても Markdown と画像が出るように -->
 <style>
 :root{
   --bg:#F7F8FA; --side:#FFFFFF; --surface:#FFFFFF; --bubble:#F1F2F5; --ink:#1A2230; --muted:#6B7684;
@@ -68,6 +68,8 @@ section.center{display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .bot-msg td,.bot-msg th{border:1px solid var(--line);padding:3px 10px;text-align:left}
 .bot-msg code{font:13px var(--mono);background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
 .bot-msg pre{background:rgba(0,0,0,.06);padding:10px;border-radius:8px;overflow-x:auto}
+.bot-msg img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;margin:6px 0;display:block;cursor:zoom-in}
+.bot-msg img.zoom{position:fixed;inset:0;margin:auto;max-height:96vh;max-width:96vw;z-index:60;cursor:zoom-out;background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .meta{font-size:12px;color:var(--muted);align-self:flex-start;padding-left:4px}
 .error{color:var(--err);align-self:flex-start;font-size:13.5px}
 
@@ -291,6 +293,7 @@ const SHAPES={
   buzz:  {d:'M8 78C8 62 18 56 28 54C24 8 76 8 72 54C82 56 92 62 92 78C92 90 80 93 72 93L28 93C20 93 8 90 8 78Z', ex:50, ey:36, dx:11, er:8},
   slinky:{d:'M8 46C8 28 36 26 38 44L38 50C55 48 72 48 86 50C90 44 94 38 96 36C97 44 94 54 90 60C92 70 86 74 78 74L30 74C20 74 14 70 12 60C8 56 8 52 8 46Z', ex:22, ey:40, dx:6, er:5},
   woody: {d:'M6 40C6 33 20 32 30 33C30 10 70 10 70 33C80 32 94 33 94 40C94 46 82 46 74 45C76 60 72 80 60 90C56 94 44 94 40 90C28 80 24 60 26 45C18 46 6 46 6 40Z', ex:50, ey:62, dx:10, er:7},
+  alien: {d:'M50 6C53 6 54 9 52 12L52 18C70 18 84 30 86 48C92 46 96 52 92 58C88 60 86 58 86 56C84 76 70 90 50 92C30 90 16 76 14 56C14 58 12 60 8 58C4 52 8 46 14 48C16 30 30 18 48 18L48 12C46 9 47 6 50 6Z', ex:50, ey:52, dx:16, er:7, eyes3:true},
   jessie:{d:'M4 38C6 32 18 31 30 32C30 18 36 8 44 8C47 12 53 12 56 8C64 8 70 18 70 32C82 31 94 32 96 38C96 44 84 44 76 43C78 52 78 60 76 66C84 72 90 84 86 96C80 97 76 92 74 86C72 84 70 80 70 76C66 86 56 92 50 92C40 92 30 84 26 66C22 60 24 50 26 43C16 44 4 44 4 38Z', ex:50, ey:58, dx:10, er:7},
   potato:{d:'M36 24C34 2 66 2 64 24C72 24 74 27 70 29C78 33 82 40 84 48C92 50 94 64 84 66C82 84 68 96 50 96C32 96 18 84 16 66C6 64 8 50 16 48C18 40 22 33 30 29C26 27 28 24 36 24Z', ex:50, ey:54, dx:10, er:7.5},
   ham:   {d:'M22 44C14 36 14 24 20 22C26 20 32 26 34 28C44 22 60 22 70 28C74 24 82 20 86 24C90 30 86 38 82 42C92 56 90 78 76 88C64 94 40 94 28 86C18 80 14 70 16 60C8 58 6 48 12 46C14 44 18 44 22 44Z', ex:52, ey:46, dx:11, er:7},
@@ -306,7 +309,7 @@ const avatar=(b,cls='avatar',id='',live=false)=>{
   return `<svg class="${cls}${live?' live':''}"${id?` id="${id}"`:''} viewBox="0 0 100 100" role="img" aria-label="${esc(b.nick)}">
     <defs><radialGradient id="${g}" cx="36%" cy="30%" r="78%"><stop offset="0" stop-color="${mix(c,[255,255,255],.55)}"/><stop offset=".4" stop-color="${mix(c,[255,255,255],.15)}"/><stop offset=".78" stop-color="${c}"/><stop offset="1" stop-color="${mix(c,[0,0,0],.32)}"/></radialGradient></defs>
     <path class="body${sh?' fixed':''}" fill="url(#${g})" d="${d0}">${anim}</path>
-    <g class="eyes">${eye(ex-dx)}${eye(ex+dx)}<g class="pupils">${pupil(ex-dx)}${pupil(ex+dx)}</g></g></svg>`;
+    <g class="eyes">${eye(ex-dx)}${eye(ex+dx)}${sh&&sh.eyes3?eye(ex).replace(`cy="${ey}"`,`cy="${ey-9}"`):''}<g class="pupils">${pupil(ex-dx)}${pupil(ex+dx)}${sh&&sh.eyes3?pupil(ex).replace(`cy="${(ey+.6*k).toFixed(2)}"`,`cy="${(ey-9+.6*k).toFixed(2)}"`).replace(`cy="${(ey-1*k).toFixed(2)}"`,`cy="${(ey-9-1*k).toFixed(2)}"`):''}</g></g></svg>`;
 };
 /* 瞳がマウスを追う（選択中のアイコンだけ）: アイコン中心からマウスへの向きに、最大 3.2 単位だけ瞳をずらす */
 let mouse=null, eyeRaf=0;
@@ -546,6 +549,7 @@ async function uploadSamples(b,label,files){
 }
 function fileChips(files){ return files&&files.length?`<div class="files">${files.map(f=>`<span>${esc(f)}</span>`).join('')}</div>`:''; }
 function append(cls,html){ log.querySelector('.empty')?.remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
+log.addEventListener('click',e=>{ if(e.target.tagName==='IMG') e.target.classList.toggle('zoom'); });
 function setStatus(b,text){ const it=bots.find(x=>x.id===b.id); if(it) it.status=text; statusEl.innerHTML=text?`${avatar(b)}<span>${esc(text)}</span>`:''; renderList(); }
 function addFiles(list){ for(const f of list) if(!pending.some(p=>p.name===f.name&&p.size===f.size)) pending.push(f); renderAttached(); }
 function renderAttached(){ attachedEl.innerHTML=''; pending.forEach((f,i)=>{ const c=document.createElement('span'); c.className='chip'; c.innerHTML=`${esc(f.name)}<button type="button" aria-label="外す">×</button>`; c.querySelector('button').onclick=()=>{pending.splice(i,1);renderAttached();}; attachedEl.appendChild(c); }); }

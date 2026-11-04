@@ -56,6 +56,12 @@ CODE_STAMP = f"{os.path.getmtime(__file__):.0f}-{os.path.getsize(__file__)}"   #
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
+# ボットが作った画像（検図の切り抜きなど）をチャットに表示するため、inbox と samples だけ読み取り公開する
+INBOX = ROOT / "inbox"
+SAMPLES = ROOT / "samples"
+INBOX.mkdir(exist_ok=True); SAMPLES.mkdir(exist_ok=True)
+app.mount("/files/inbox", StaticFiles(directory=INBOX), name="files-inbox")
+app.mount("/files/samples", StaticFiles(directory=SAMPLES), name="files-samples")
 
 HISTORY = ROOT / "app" / "history.json"   # ボットごとの会話ログ（左の一覧のプレビュー用）
 CONFIG = ROOT / "app" / "config.json"     # 画面から保存した設定（API キーなど。git 対象外）
