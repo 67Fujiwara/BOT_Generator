@@ -4,18 +4,19 @@ Set-Location $PSScriptRoot
 
 # A candidate is a plain string such as 'python' or 'py -3.12' (kept as a string: PowerShell
 # unrolls one-element arrays returned from functions, which once turned 'python' into 'p').
-function Invoke-Py([string]$cmd, [string[]]$args) {
-    $parts = $cmd -split ' '
+function Invoke-Py([string]$cmd, [string[]]$extra) {
+    $parts = @($cmd -split ' ')
     $exe = $parts[0]
-    $rest = @()
-    if ($parts.Length -gt 1) { $rest = $parts[1..($parts.Length - 1)] }
-    & $exe @rest @args
+    $all = @()
+    if ($parts.Length -gt 1) { $all += $parts[1..($parts.Length - 1)] }
+    if ($extra) { $all += $extra }
+    & $exe $all
 }
 
 function Test-Py([string]$cmd) {
     try {
         $out = Invoke-Py $cmd @('-c', 'import sys; print(sys.version_info >= (3, 10))') 2>$null
-        return ($LASTEXITCODE -eq 0 -and "$out".Trim() -eq 'True')
+        return (($LASTEXITCODE -eq 0) -and ("$out".Trim() -eq 'True'))
     } catch { return $false }
 }
 
@@ -44,8 +45,15 @@ if (-not $py) {
 }
 if (-not $py) {
     Write-Host ''
-    Write-Host 'Python 3.10+ was not found. Install it from https://www.python.org/downloads/'
-    Write-Host '(tick "Add python.exe to PATH"), then run setup.bat again.'
+    Write-Host 'Python 3.10+ was not found. What each command returned:'
+    foreach ($c in @('python', 'py -3', 'python3')) {
+        try { $o = Invoke-Py $c @('--version') 2>&1 | Out-String } catch { $o = $_.Exception.Message }
+        Write-Host ("  {0,-8} -> {1}" -f $c, ($o.Trim() -replace "`r?`n", ' | '))
+    }
+    Write-Host ''
+    Write-Host 'If "python" opens the Microsoft Store or prints nothing: Settings > Apps > Advanced app settings >'
+    Write-Host 'App execution aliases > turn OFF "python.exe" and "python3.exe", then run setup.bat again.'
+    Write-Host 'Otherwise install from https://www.python.org/downloads/ (tick "Add python.exe to PATH") and run setup.bat again.'
     exit 1
 }
 Write-Host "      Using: $py"
