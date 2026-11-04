@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bot-team</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<script>try{const t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
 <script src="/static/vendor/marked.min.js"></script><!-- marked v12.0.2 (MIT) を同梱: 社内ネットワークで CDN が塞がれていても Markdown と画像が出るように -->
 <style>
 :root{
@@ -12,9 +13,11 @@
   --line:#E3E6EB; --accent:#1F5FBF; --accent-ink:#FFF; --caution:#F2C32A; --err:#B3261E;
   --mono:ui-monospace,"SF Mono",Consolas,monospace;
 }
+/* テーマ: 既定は OS に合わせる。⚙ で ライト / ダーク に固定できる（<html data-theme="light|dark">） */
 @media (prefers-color-scheme:dark){
-  :root{ --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; }
+  :root:not([data-theme="light"]){ --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; }
 }
+:root[data-theme="dark"]{ --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; }
 *{box-sizing:border-box} html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font:14.5px/1.7 "Noto Sans JP",system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;
   display:grid;grid-template-columns:270px 1fr 300px;grid-template-rows:100%;overflow:hidden}
@@ -212,6 +215,12 @@ body.drag .drop-pill{display:flex}
 <dialog class="settings" id="settings">
   <h2>設定</h2>
   <p id="setCurrent">読み込み中…</p>
+  <label for="themeSel">テーマ</label>
+  <select id="themeSel" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
+    <option value="auto">OS に合わせる</option>
+    <option value="light">ライト</option>
+    <option value="dark">ダーク</option>
+  </select>
   <label for="sendKey">送信キー</label>
   <select id="sendKey" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
     <option value="enter">Enter で送信（Shift+Enter で改行）</option>
@@ -627,6 +636,10 @@ input.addEventListener('keydown',e=>{
 });
 $('#sendKey').onchange=e=>{ sendKey=e.target.value; try{ localStorage.setItem('sendKey',sendKey); }catch(e2){} applySendKey(); };
 $('#sendKey').value=sendKey; applySendKey();
+/* テーマ切替（ブラウザに記憶） */
+let theme='auto'; try{ theme=localStorage.getItem('theme')||'auto'; }catch(e){}
+$('#themeSel').value=theme;
+$('#themeSel').onchange=e=>{ theme=e.target.value; if(theme==='auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme=theme; try{ localStorage.setItem('theme',theme); }catch(e2){} };
 input.addEventListener('input',()=>{input.style.height='';input.style.height=Math.min(input.scrollHeight,220)+'px';});
 $('#filter').addEventListener('input',renderList);
 $('#pick').onclick=()=>$('#file').click();
