@@ -241,6 +241,15 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <option value="light">ライト</option>
     <option value="dark">ダーク</option>
   </select>
+  <label for="notifySec">返事のポップアップ <span style="font-weight:400">（この秒数以上かかった返事を知らせる。別タブ・別アプリを見ている間は秒数に関係なく知らせる）</span></label>
+  <select id="notifySec" class="set-field">
+    <option value="0">いつも（即答でも）</option>
+    <option value="3">3 秒以上</option>
+    <option value="10">10 秒以上</option>
+    <option value="20">20 秒以上</option>
+    <option value="60">1 分以上</option>
+    <option value="-1">画面を見ていない時だけ</option>
+  </select>
   <label for="sendKey">送信キー</label>
   <select id="sendKey" class="set-field">
     <option value="enter">Enter で送信（Shift+Enter で改行）</option>
@@ -632,7 +641,8 @@ async function send(){
         if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
         else if(ev.type==='tool'){ setStatus(b,ev.text); toollog.textContent+=ev.text+'\n'; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`);
-          if(replyText&&(ev.sec>=3||document.hidden||!document.hasFocus()||current.id!==b.id)) notifyReply(b,replyText,ev.sec); }
+          const away=document.hidden||!document.hasFocus()||current.id!==b.id;
+          if(replyText&&(away||(notifySec>=0&&ev.sec>=notifySec))) notifyReply(b,replyText,ev.sec); }
         else if(ev.type==='error'){ append('error',esc(ev.text)); if(/api key|authenticat|oauth|not logged in/i.test(ev.text)) openSettings('認証に失敗しました。API キーを保存するか、claude で /login し直してください。'); }
       }
     }
@@ -656,6 +666,10 @@ input.addEventListener('keydown',e=>{
 });
 $('#sendKey').onchange=e=>{ sendKey=e.target.value; try{ localStorage.setItem('sendKey',sendKey); }catch(e2){} applySendKey(); };
 $('#sendKey').value=sendKey; applySendKey();
+/* 返事ポップアップのしきい値（秒。-1 = 画面を見ていない時だけ。ブラウザに記憶） */
+let notifySec=10; try{ const v=localStorage.getItem('notifySec'); if(v!==null) notifySec=parseInt(v,10); }catch(e){}
+$('#notifySec').value=String(notifySec);
+$('#notifySec').onchange=e=>{ notifySec=parseInt(e.target.value,10); try{ localStorage.setItem('notifySec',String(notifySec)); }catch(e2){} };
 /* テーマ切替（ブラウザに記憶） */
 let theme='auto'; try{ theme=localStorage.getItem('theme')||'auto'; }catch(e){}
 $('#themeSel').value=theme;
