@@ -80,6 +80,7 @@ bot-team/
                           config.json: api_key, openai_api_key, cf_account_id, cf_api_token, transcribe_engine(auto|cloudflare|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）
                           画面どこでもドロップ、＋ボタン、貼り付け。送信キーは ⚙ で切替（Enter / Ctrl+Enter、localStorage に記憶）
+                          返事の通知: done で sec>=3 か document.hidden/非フォーカス/別ボット表示中なら notifyReply()（toast.reply＋Notification、アイコンは avatar SVG→canvas→PNG）。一言はフロントマター say:
                           フロントマター record: true のボット（スリンキー）では 🎙 でライブ録音: マイク＋任意でタブ音声を AudioContext で合成、
                           chunk_sec（既定 45 秒）ごとに stop→start で完結した webm を /transcribe/chunk に順番に送り（prev=直前の末尾、glossary=用語）、
                           文字をチャットに逐次表示。停止で /transcribe/finish に全文保存 → txt を添付してスリンキーへ自動送信

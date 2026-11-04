@@ -125,6 +125,9 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .toast .tb button{border:1px solid var(--line);background:none;color:var(--ink);border-radius:6px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}
 .toast .tb button.p{background:var(--accent);color:#fff;border-color:var(--accent)}
 @keyframes toastin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.toast.reply{border-left-color:var(--c,var(--accent));display:grid;grid-template-columns:40px 1fr;gap:10px;align-items:center;cursor:pointer}
+.toast.reply .avatar{width:40px;height:40px}
+.toast.reply .who{font-weight:700;font-size:13px} .toast.reply .say{font-size:14px;margin:1px 0} .toast.reply .snip{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* サンプル置き場（右パネル） */
 .samples{margin-top:16px;border-top:1px solid var(--line);padding-top:10px}
 .samples h3{font-size:12px;color:var(--muted);margin:0 0 4px;font-weight:500}
@@ -259,7 +262,7 @@ body.drag .drop-pill{display:flex}
 <script>
 const $=s=>document.querySelector(s);
 const log=$('#log'), input=$('#input'), sendBtn=$('#send'), attachedEl=$('#attached'), statusEl=$('#status'), toollog=$('#toollog');
-const AUTO={id:'_auto',nick:'ウッディ',desc:'おまかせ役。内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#D98E5B',shape:'woody',preview:''};
+const AUTO={id:'_auto',nick:'ウッディ',desc:'おまかせ役。内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#D98E5B',shape:'woody',say:'返事きたよ、見てみて',preview:''};
 let bots=[], current=AUTO, pending=[], busy=new Set(), resetNext=false;
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const md=s=>window.marked?marked.parse(s,{breaks:true}):esc(s).replace(/\n/g,'<br>');
@@ -428,6 +431,34 @@ async function checkReminders(){
 loadTasks(); setInterval(loadTasks,60000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadTasks(); });
 
+/* ── 返事の通知: 3 秒以上かかった返事、または別タブ・別アプリを見ている間の返事は、ボットのアイコン付きでポップアップ＋ブラウザ通知 ── */
+const pngCache={};
+function avatarPng(b){
+  if(pngCache[b.id]) return Promise.resolve(pngCache[b.id]);
+  return new Promise(res=>{
+    const svg=avatar(b,'avatar').replace(/<animate[^>]*\/>/g,'').replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" ');
+    const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})); const im=new Image();
+    im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=c.height=128; c.getContext('2d').drawImage(im,0,0,128,128); pngCache[b.id]=c.toDataURL('image/png'); }catch(e){} URL.revokeObjectURL(url); res(pngCache[b.id]||''); };
+    im.onerror=()=>res(''); im.src=url;
+  });
+}
+function askedBack(text){ const t=(text||'').trim().slice(-120); return /[?？]/.test(t); }
+async function notifyReply(b,text,sec){
+  const say = askedBack(text) ? 'ちょっと聞きたいことがあるよ' : (b.say||'できたよ！');
+  const snip=(text||'').replace(/[#*`>\-]/g,'').replace(/\s+/g,' ').trim().slice(0,70);
+  // 画面内ポップアップ（クリックでそのボットへ）
+  const box=$('#toasts'); const el=document.createElement('div'); el.className='toast reply'; el.style.setProperty('--c',b.color);
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(say)}</div><div class="snip">${esc(snip)}</div></div>`;
+  el.onclick=()=>{ select(b); el.remove(); }; box.appendChild(el); setTimeout(()=>el.remove(),12000);
+  // ブラウザ通知（許可済みのとき）
+  if('Notification' in window&&Notification.permission==='granted'){
+    const icon=await avatarPng(b);
+    const n=new Notification(`${b.nick}: ${say}`,{body:snip,icon:icon||undefined,tag:'reply-'+b.id,renotify:true});
+    n.onclick=()=>{ window.focus(); select(b); n.close(); };
+  }
+}
+function ensureNotifyPermission(){ if('Notification' in window&&Notification.permission==='default') Notification.requestPermission().then(p=>{ if(p==='granted') $('#taskNotify').textContent='通知: 許可済み'; }); }
+
 /* ── ライブ録音（スリンキー）: マイク（＋任意でオンライン会議のタブ音声）を 1 本に合成し、
    区切りごとに stop→start で完結した webm を作って /transcribe/chunk に順番に送る。
    文字は届き次第チャットに出し、停止すると全文を文字起こし txt として添付してスリンキーに送る。 ── */
@@ -552,8 +583,9 @@ async function refreshFiles(){ const l=await (await fetch('/inbox')).json(); $('
 async function send(){
   const text=input.value.trim(); const b=current;
   if(busy.has(b.id)||(!text&&!pending.length)) return;
-  busy.add(b.id); sendBtn.disabled=true;
+  busy.add(b.id); sendBtn.disabled=true; ensureNotifyPermission();
   const files=pending.slice(); pending=[]; renderAttached();
+  const sentAt=Date.now(), hiddenAtSend=document.hidden; let replyText='';
   append('msg me',esc(text)+fileChips(files.map(f=>f.name)));
   input.value=''; input.style.height='';
   const fd=new FormData(); fd.append('message',text); fd.append('bot',b.id==='_auto'?'':b.id);
@@ -568,9 +600,10 @@ async function send(){
       while((i=buf.indexOf('\n\n'))>=0){
         const line=buf.slice(0,i).replace(/^data: /,''); buf=buf.slice(i+2); if(!line) continue;
         const ev=JSON.parse(line);
-        if(ev.type==='text'){ if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
+        if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
         else if(ev.type==='tool'){ setStatus(b,ev.text); toollog.textContent+=ev.text+'\n'; }
-        else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`); }
+        else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`);
+          if(replyText&&(ev.sec>=3||document.hidden||!document.hasFocus()||current.id!==b.id)) notifyReply(b,replyText,ev.sec); }
         else if(ev.type==='error'){ append('error',esc(ev.text)); if(/api key|authenticat|oauth|not logged in/i.test(ev.text)) openSettings('認証に失敗しました。API キーを保存するか、claude で /login し直してください。'); }
       }
     }
