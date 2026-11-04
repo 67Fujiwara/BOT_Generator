@@ -563,24 +563,41 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                     env=_sdk_env(),
                 )
             t0 = time.time()
-            async for msg in query(prompt=prompt, options=opts):
-                if isinstance(msg, AssistantMessage):
-                    for b in msg.content:
-                        if isinstance(b, TextBlock) and b.text.strip():
-                            reply.append(b.text)
-                            yield _sse({"type": "text", "text": b.text})
-                        elif isinstance(b, ToolUseBlock):
-                            label = b.name
-                            if b.name in ("Agent", "Task"):
-                                label = f"{b.input.get('subagent_type', '')} に委譲"
-                            elif b.name == "Bash":
-                                label = (b.input.get("command") or "")[:90]
-                            yield _sse({"type": "tool", "text": label})
-                elif isinstance(msg, ResultMessage):
-                    # 委譲ありの経路ではサブエージェント分も流れてくるので、最後の1件だけ採用する
-                    sid = getattr(msg, "session_id", None)
-                    if sid:
-                        _sessions[bot_id] = sid
+
+            async def run(options):
+                """1 回分の送受信。SSE イベントを yield する。"""
+                async for msg in query(prompt=prompt, options=options):
+                    if isinstance(msg, AssistantMessage):
+                        for b in msg.content:
+                            if isinstance(b, TextBlock) and b.text.strip():
+                                reply.append(b.text)
+                                yield _sse({"type": "text", "text": b.text})
+                            elif isinstance(b, ToolUseBlock):
+                                label = b.name
+                                if b.name in ("Agent", "Task"):
+                                    label = f"{b.input.get('subagent_type', '')} に委譲"
+                                elif b.name == "Bash":
+                                    label = (b.input.get("command") or "")[:90]
+                                yield _sse({"type": "tool", "text": label})
+                    elif isinstance(msg, ResultMessage):
+                        sid = getattr(msg, "session_id", None)
+                        if sid:
+                            _sessions[bot_id] = sid
+
+            try:
+                async for ev in run(opts):
+                    yield ev
+            except Exception as e:  # noqa: BLE001
+                # 「前の会話が見つからない」は続きを諦めて新しい会話でやり直す（設定置き場の切替・履歴掃除の後に起きる）
+                if "No conversation found" in str(e) and getattr(opts, "resume", None):
+                    _sessions.pop(bot_id, None)
+                    reply.clear()
+                    yield _sse({"type": "tool", "text": "前の会話が見つからないので新しい会話で送り直します"})
+                    opts.resume = None
+                    async for ev in run(opts):
+                        yield ev
+                else:
+                    raise
             _history[bot_id].append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
             _save_history()
             yield _sse({"type": "done", "sec": round(time.time() - t0, 1)})

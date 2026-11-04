@@ -105,6 +105,7 @@ bot-team/
 - 確認済み: extract/compare スクリプト（Excel と罫線なしPDFのサンプルで差分検出OK）、サーバー起動、/bots、/history、/inbox、ファイル保存、SSE配信、UI。
 - **未確認: Claude Agent SDK への接続部分**（この作業環境に SDK がなかった）。`server.py` の `ClaudeAgentOptions(cwd, setting_sources=["project"], allowed_tools=[... "Agent","Task"], permission_mode="acceptEdits", resume=...)` と `AssistantMessage / TextBlock / ToolUseBlock / ResultMessage` のインポートは公式ドキュメントに合わせて書いたが、実行はしていない。最初の1回はここで止まる可能性が高い。
 - 認証: 画面左上 ⚙ の設定ダイアログで API キーを保存（`app/config.json`、git 対象外、`ClaudeAgentOptions(env=...)` で渡すので環境変数より優先）、または `ANTHROPIC_API_KEY`、または Claude Code ログイン。ダイアログに「接続テスト」あり（haiku で1往復）。
+- 「No conversation found with session ID」（設定置き場の切替や履歴掃除で前の会話 ID が無い）は、server.py が続きを諦めて新しい会話で 1 回だけ自動で送り直す（画面に「新しい会話で送り直します」と出る）。
 - キー保存時は `CLAUDE_CONFIG_DIR=app/claude_home`（git 対象外）も渡し、`~/.claude` の Claude.ai ログインを Claude Code に見せない。これをしないと期限切れのログインが優先されて `Failed to authenticate: OAuth session expired` になる（2026-11-03 実機で発生）。キー未保存なら従来どおり `~/.claude` のログインを使う。
 - 2026-11-03 追記: `claude-agent-sdk` 0.2.177 のソースと突き合わせ、`server.py` が使う名前（`query`, `ClaudeAgentOptions`, `AssistantMessage`, `ResultMessage`, `TextBlock`, `ToolUseBlock`）と引数（`cwd`, `setting_sources=["project"]`, `allowed_tools`, `permission_mode="acceptEdits"`, `resume`）、`ResultMessage.session_id` はすべて存在することを確認済み。wheel に Claude Code CLI 2.1.317 が同梱されているので、別途 `npm install -g @anthropic-ai/claude-code` は不要。実際に API を呼ぶところまでは未実行。
 - 同日、`scripts/extract_items.py` と `compare_lists.py` を合成データ（Excel の BOM と CSV の発注書、列名違い・全角型式・小計行入り）で再確認し、漏れ/余分/数量不一致/単価不一致/金額合計差がすべて検出された。
