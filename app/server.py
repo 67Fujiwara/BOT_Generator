@@ -199,7 +199,8 @@ def history(bot: str):
 
 @app.get("/")
 def index():
-    return FileResponse(ROOT / "app" / "static" / "index.html")
+    # 画面は毎回ディスクから読み直す（更新後に古い画面がキャッシュで残らないように）
+    return FileResponse(ROOT / "app" / "static" / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 @app.get("/bots")
