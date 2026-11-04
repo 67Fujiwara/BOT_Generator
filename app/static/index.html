@@ -13,11 +13,14 @@
   --line:#E3E6EB; --accent:#1F5FBF; --accent-ink:#FFF; --caution:#F2C32A; --err:#B3261E;
   --mono:ui-monospace,"SF Mono",Consolas,monospace;
 }
-/* テーマ: 既定は OS に合わせる。⚙ で ライト / ダーク に固定できる（<html data-theme="light|dark">） */
+/* テーマ: 既定は OS に合わせる。⚙ で ライト / ダーク に固定できる（<html data-theme="light|dark">）。
+   color-scheme でスクロールバー・入力欄・<dialog> などのネイティブ部品もテーマに合わせる */
+:root{ color-scheme:light; --code-bg:rgba(0,0,0,.06); --shadow:rgba(0,0,0,.25) }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){ --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; }
+  :root:not([data-theme="light"]){ color-scheme:dark; --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; --code-bg:rgba(255,255,255,.07); --shadow:rgba(0,0,0,.55) }
 }
-:root[data-theme="dark"]{ --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; }
+:root[data-theme="dark"]{ color-scheme:dark; --bg:#14181D; --side:#1B2026; --surface:#1B2026; --bubble:#232A32; --ink:#E7EBEF; --muted:#9AA5B1; --line:#2E353D; --accent:#5A8FE0; --code-bg:rgba(255,255,255,.07); --shadow:rgba(0,0,0,.55) }
+*{scrollbar-width:thin}
 *{box-sizing:border-box} html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font:14.5px/1.7 "Noto Sans JP",system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;
   display:grid;grid-template-columns:270px 1fr 300px;grid-template-rows:100%;overflow:hidden}
@@ -69,8 +72,8 @@ section.center{display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .bot-msg ul,.bot-msg ol{padding-left:22px;margin:4px 0}
 .bot-msg table{border-collapse:collapse;margin:8px 0;font-size:13.5px;display:block;overflow-x:auto}
 .bot-msg td,.bot-msg th{border:1px solid var(--line);padding:3px 10px;text-align:left}
-.bot-msg code{font:13px var(--mono);background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
-.bot-msg pre{background:rgba(0,0,0,.06);padding:10px;border-radius:8px;overflow-x:auto}
+.bot-msg code{font:13px var(--mono);background:var(--code-bg);padding:1px 4px;border-radius:3px}
+.bot-msg pre{background:var(--code-bg);padding:10px;border-radius:8px;overflow-x:auto}
 .bot-msg img{max-width:100%;max-height:320px;width:auto;height:auto;border:1px solid var(--line);border-radius:8px;margin:6px 0;display:block;cursor:zoom-in;background:#fff}
 .bot-msg img.zoom{position:fixed;inset:0;margin:auto;max-height:96vh;max-width:96vw;z-index:60;cursor:zoom-out;background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .meta{font-size:12px;color:var(--muted);align-self:flex-start;padding-left:4px}
@@ -123,7 +126,7 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .task-foot{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:12px;color:var(--muted)} .task-foot button{border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 /* 催促ポップアップ */
 .toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(380px,92vw)}
-.toast{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--err);border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.25);font-size:13px;animation:toastin .25s ease-out}
+.toast{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--err);border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px var(--shadow);font-size:13px;animation:toastin .25s ease-out}
 .toast .tl{font-weight:600;margin-bottom:4px} .toast .tb{display:flex;gap:6px;margin-top:8px}
 .toast .tb button{border:1px solid var(--line);background:none;color:var(--ink);border-radius:6px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}
 .toast .tb button.p{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -155,10 +158,27 @@ body.drag::after{content:"";position:fixed;inset:14px;z-index:41;pointer-events:
 body.drag::after{padding-top:0}
 body.drag .drop-pill{display:flex}
 .drop-pill{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:42;pointer-events:none;align-items:center;gap:10px;
-  padding:14px 22px;border-radius:999px;background:var(--surface);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.35);border:1px solid var(--line);font-size:14px;font-weight:600}
+  padding:14px 22px;border-radius:999px;background:var(--surface);color:var(--ink);box-shadow:0 12px 40px var(--shadow);border:1px solid var(--line);font-size:14px;font-weight:600}
 .drop-pill svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 @keyframes dropPulse{0%,100%{border-color:var(--accent);opacity:.9}50%{border-color:color-mix(in srgb,var(--accent) 45%,transparent);opacity:1}}
 @media (prefers-reduced-motion:reduce){ body.drag::after{animation:none} }
+/* ── 設定ダイアログ ── */
+dialog.settings{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:22px 24px;width:min(460px,92vw);max-height:92vh;overflow:auto;font:inherit}
+dialog.settings::backdrop{background:rgba(0,0,0,.35)}
+dialog.settings h2{font-size:16px;margin:0 0 6px}
+dialog.settings p{margin:6px 0;font-size:13px;color:var(--muted)}
+dialog.settings label{display:block;font-size:12px;color:var(--muted);margin-top:14px}
+dialog.settings input,dialog.settings .set-field{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px var(--mono);background:var(--bg);color:var(--ink);margin-top:4px}
+dialog.settings .set-field{font:inherit;font-size:13px}
+dialog.settings details summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:14px}
+dialog.settings a{color:var(--accent)}
+dialog.settings .btns{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+dialog.settings .btns .spacer{flex:1}
+dialog.settings button{font:inherit;font-size:13px;border-radius:8px;padding:7px 14px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)}
+dialog.settings button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+dialog.settings button:disabled{opacity:.5;cursor:default}
+.set-status{font-size:13px;margin-top:10px;min-height:1.6em;white-space:pre-wrap}
+.set-status.ok{color:#2E8B57} .set-status.ng{color:var(--err)}
 @media (max-width:980px){ body{grid-template-columns:230px 1fr} aside.right{display:none} }
 @media (prefers-reduced-motion:reduce){ .item.busy .dot{animation:none} .avatar.live .eyes,.avatar.live .body.fixed{animation:none} }
 </style>
@@ -216,13 +236,13 @@ body.drag .drop-pill{display:flex}
   <h2>設定</h2>
   <p id="setCurrent">読み込み中…</p>
   <label for="themeSel">テーマ</label>
-  <select id="themeSel" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
+  <select id="themeSel" class="set-field">
     <option value="auto">OS に合わせる</option>
     <option value="light">ライト</option>
     <option value="dark">ダーク</option>
   </select>
   <label for="sendKey">送信キー</label>
-  <select id="sendKey" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
+  <select id="sendKey" class="set-field">
     <option value="enter">Enter で送信（Shift+Enter で改行）</option>
     <option value="ctrl">Ctrl+Enter で送信（Enter で改行）</option>
   </select>
@@ -237,7 +257,7 @@ body.drag .drop-pill{display:flex}
   </div>
   <details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">ライブ録音・文字起こしの設定（スリンキー）</summary>
     <label for="trEngine">文字起こしエンジン</label>
-    <select id="trEngine" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px">
+    <select id="trEngine" class="set-field">
       <option value="auto">自動（外部サーバー → Cloudflare → OpenAI → ローカル Whisper の順で使えるもの）</option>
       <option value="cloudflare">Cloudflare Workers AI の Whisper（無料枠あり・おすすめ）</option>
       <option value="openai">OpenAI（上の文字起こしキー、有料）</option>
@@ -253,7 +273,7 @@ body.drag .drop-pill{display:flex}
     <label for="trToken">外部サーバーのトークン <span id="trTokenCurrent" style="margin-left:8px"></span></label>
     <input id="trToken" type="password" placeholder="Bearer に入れる値（空で保存すると変更なし）" autocomplete="off">
     <label for="trGlossary">用語（案件名・人名・製品名・社内用語。カンマ区切り。固有名詞の誤りが減ります）</label>
-    <textarea id="trGlossary" rows="2" placeholder="例: SYNAPSE, 藤原, 制御盤, FAT, 納期, KV-8000" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--bg);color:var(--ink);margin-top:4px;resize:vertical"></textarea>
+    <textarea id="trGlossary" rows="2" class="set-field" placeholder="例: SYNAPSE, 藤原, 制御盤, FAT, 納期, KV-8000" style="resize:vertical"></textarea>
     <label for="trChunk">区切りの長さ（秒、20〜90。既定 45）</label>
     <input id="trChunk" type="number" min="20" max="90" value="45" style="width:120px">
     <div class="btns" style="margin-top:10px"><span class="spacer"></span><button type="button" id="trSave">文字起こし設定を保存</button></div>
