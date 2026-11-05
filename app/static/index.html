@@ -798,7 +798,7 @@ document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;document.body.classList.remove('drag');addFiles(e.dataTransfer.files);input.focus();});
 document.addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles(e.clipboardData.files);});
 loadBots().then(()=>select(AUTO));
-fetch('/version').then(r=>r.json()).then(v=>{ const [h,d]=(v.version||'').split(' '); $('#ver').textContent=h?`v${h}${d?' '+d.slice(5).replace('-','/'):''}`:''; $('#ver').title=`版: ${v.version}\nフォルダ: ${v.folder}`; }).catch(()=>{});
+fetch('/version').then(r=>r.json()).then(v=>{ const [h,d]=(v.version||'').split(' '); $('#ver').textContent=h?`${h}${d?' '+d.slice(5).replace('-','/'):''}`:''; $('#ver').title=`版: ${v.version}（改善を取り込むたびに 1 増える）\nフォルダ: ${v.folder}`; }).catch(()=>{});
 </script>
 </body>
 </html>

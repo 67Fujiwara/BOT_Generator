@@ -56,14 +56,19 @@ CODE_STAMP = f"{os.path.getmtime(__file__):.0f}-{os.path.getsize(__file__)}"   #
 
 
 def _git_version() -> str:
-    """表示用の版: 'a6c7090 2026-11-05' のような短いコミット番号と日付。git が無ければ 'zip'。"""
+    """表示用の版: 'v71 2026-11-05'。番号は VERSION ファイル（改善を取り込むたびに 1 増える）、日付はそのコミットの日。"""
     import subprocess
     try:
-        out = subprocess.run(["git", "log", "-1", "--format=%h %cd", "--date=short"], cwd=ROOT,
+        num = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        num = "?"
+    try:
+        out = subprocess.run(["git", "log", "-1", "--format=%cd", "--date=short"], cwd=ROOT,
                              capture_output=True, text=True, timeout=5)
-        return out.stdout.strip() or "zip"
+        date = out.stdout.strip()
     except Exception:  # noqa: BLE001
-        return "zip"
+        date = ""
+    return f"v{num} {date}".strip()
 
 
 VERSION = _git_version()

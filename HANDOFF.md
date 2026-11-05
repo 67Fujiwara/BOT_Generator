@@ -40,6 +40,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 
 ```
 bot-team/
+  VERSION                 版番号（改善 1 件＝コミット 1 件ごとに +1。画面左上と ⚙ に表示。コミット前に必ず増やす）
   CLAUDE.md               プロジェクト説明（各ボットの呼び方、共通ルール、入口の説明）
   HANDOFF.md              このファイル
   .claude/agents/         potato.md  ham.md  rex.md  buzz.md  slinky.md  jessie.md  alien.md
