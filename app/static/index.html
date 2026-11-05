@@ -229,7 +229,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
       <div class="row2"><input id="taskDue" placeholder="納期（すぐ / 今週中 / 今月中旬 / 11/20 / なし）" autocomplete="off"><button type="submit">追加</button></div>
     </form>
     <ul class="tasklist" id="tasklist"></ul>
-    <div class="task-foot"><span id="taskCount"></span><button type="button" id="taskShowDone">完了も表示</button><button type="button" id="taskNotify">通知を許可</button></div>
+    <div class="task-foot"><span id="taskCount"></span><button type="button" id="taskCopy" title="未完了タスクを文字でコピー（メールやメモに貼る用）">コピー</button><button type="button" id="taskShowDone">完了も表示</button><button type="button" id="taskNotify">通知を許可</button></div>
   </div>
   <div class="toasts" id="toasts"></div>
   <div class="drop-pill" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>ファイルをここに置く<span style="font-weight:400;color:var(--muted)">（添付になります）</span></div>
@@ -427,6 +427,13 @@ $('#taskAdd').onsubmit=async e=>{
   $('#taskTitle').value=''; $('#taskDue').value=''; loadTasks();
 };
 $('#taskShowDone').onclick=()=>{ showDone=!showDone; loadTasks(); };
+$('#taskCopy').onclick=async()=>{
+  const lines=tasksCache.map(t=>`${t.done?'✓':'□'} ${t.title}（${dueText(t)}）${t.note?' メモ: '+t.note:''}`);
+  const text=lines.join('\n')||'タスクはありません';
+  try{ await navigator.clipboard.writeText(text); $('#taskCopy').textContent='コピーしました'; }
+  catch(e){ prompt('コピーできなかったので、ここから選んでコピーしてください', text); }
+  setTimeout(()=>{ $('#taskCopy').textContent='コピー'; },1500);
+};
 $('#taskNotify').onclick=()=>{ if('Notification' in window) Notification.requestPermission().then(p=>{ $('#taskNotify').textContent=p==='granted'?'通知: 許可済み':'通知を許可'; }); };
 if('Notification' in window&&Notification.permission==='granted') $('#taskNotify').textContent='通知: 許可済み';
 
