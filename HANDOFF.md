@@ -64,6 +64,8 @@ bot-team/
                           で表記ゆれ・孤立符号・孤立線番・ページ欠け・図番不一致・文字なしを検出し、find-NN.png（赤枠）と report.md を出す。crop サブコマンドで目視箇所の切り抜き
                           符号の正規表現は一般的な略号で仮置き。実図面で見直す。終了コード 0/1/2
                           --manual <pdf|txt|md|フォルダ> で先にマニュアル本文（ページ番号付き、60k 字まで、.pdf.txt にキャッシュ）を出力。エイリアンは samples/alien/マニュアル を毎回渡す
+    memory.py             全ボット用「覚えている指示」。app/memory/<bot>.json（_all は全員）。返事の [[覚える: …]] / [[全員で覚える: …]] / [[忘れる: …]]
+                          を server.py が apply_tags() で拾って保存し表示から消す。prompt_block() をシステムプロンプト末尾に付ける。右パネル「詳細」で確認・追加・削除
     tasks.py              ジェシー用。app/tasks.json に登録/完了/一覧。parse_due() が「すぐ/今週中/今月中旬/11/20/金曜/3日後/なし」を
                           due_start〜due_end に変換（解釈不能は終了コード 3）。status() が 期限切れ/すぐ/今日まで/期間内/予定/納期なし。--store で保存先差し替え（テスト用）
     check_lists.py        上2つをまとめて実行（抽出×2→比較→レポート標準出力）。ポテトはこれを1回の Bash で呼ぶ
@@ -77,6 +79,7 @@ bot-team/
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , /samples/{bot} , /version ,
                           POST /chat (SSE) , /settings , /settings/test , /samples/{bot} , /transcribe/chunk , /transcribe/finish , /shutdown , DELETE /samples/{bot}
                           GET/POST /tasks , POST /tasks/{id}/(done|undone|remove|reminded|snooze|due)
+                          GET/POST/DELETE /memory/{bot}
                           静的配信: /static , /files/inbox , /files/samples（ボットが作った画像をチャットに出す用。config.json などは公開しない）
                           config.json: api_key, openai_api_key, cf_account_id, cf_api_token, transcribe_engine(auto|cloudflare|openai|whisper|remote), remote_transcribe_url/token, glossary, chunk_sec
     static/index.html     3カラムUI（左: ボット一覧 / 中央: 会話 / 右: 詳細・作業ログ・ファイル）

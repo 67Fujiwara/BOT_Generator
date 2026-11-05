@@ -329,6 +329,37 @@ def transcribe_finish(meeting: str = Form(""), text: str = Form("")):
     return {"ok": True, "path": str(p.relative_to(ROOT))}
 
 
+# ---- 覚えている指示（やり方の好み）: scripts/memory.py。返事の [[覚える: …]] を拾って保存し、次回から指示に付ける ----
+def _memory_mod():
+    import sys as _sys
+    if str(ROOT / "scripts") not in _sys.path:
+        _sys.path.insert(0, str(ROOT / "scripts"))
+    import memory as mem
+    return mem
+
+
+@app.get("/memory/{bot}")
+def get_memory(bot: str):
+    mem = _memory_mod()
+    return {"mine": mem.load(bot), "all": mem.load(mem.ALL) if bot != mem.ALL else []}
+
+
+@app.post("/memory/{bot}")
+def add_memory(bot: str, text: str = Form(...)):
+    mem = _memory_mod()
+    if not text.strip():
+        return {"ok": False, "error": "内容を入れてください"}
+    mem.add(bot, text)
+    return {"ok": True, **get_memory(bot)}
+
+
+@app.delete("/memory/{bot}")
+def delete_memory(bot: str, key: str):
+    mem = _memory_mod()
+    gone = mem.remove(bot, key)
+    return {"ok": True, "removed": [g["text"] for g in gone], **get_memory(bot)}
+
+
 # ---- タスク（ジェシー）: scripts/tasks.py と同じ app/tasks.json を読む ----------------------------
 def _tasks_mod():
     import sys as _sys
@@ -531,6 +562,10 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
         prompt = "お願いします"
     if saved:
         prompt += "\n\nファイル:\n" + "\n".join(f"- {p.relative_to(ROOT)}" for p in saved)
+    if not agent:                                   # ウッディ（おまかせ）経路: 覚えている指示を本文の先頭に添える
+        remembered = _memory_mod().prompt_block(bot_id)
+        if remembered:
+            prompt = remembered + "\n\n" + prompt
     if agent and agent.get("tasks", "").lower() in ("true", "yes", "1"):
         tk = _tasks_mod()
         open_tasks = [t for t in tk._load() if not t.get("done")]
@@ -558,6 +593,9 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                 body = agent["body"]
                 if BOT_RULES.exists():
                     body += "\n\n" + BOT_RULES.read_text(encoding="utf-8").strip()
+                remembered = _memory_mod().prompt_block(bot_id)
+                if remembered:
+                    body += "\n\n" + remembered
                 sys_prompt = ({"type": "preset", "preset": "claude_code", "append": body}
                               if tools else body)
                 opts = ClaudeAgentOptions(
@@ -589,8 +627,15 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
                     if isinstance(msg, AssistantMessage):
                         for b in msg.content:
                             if isinstance(b, TextBlock) and b.text.strip():
-                                reply.append(b.text)
-                                yield _sse({"type": "text", "text": b.text})
+                                text = b.text
+                                if "[[" in text:
+                                    text, notes = _memory_mod().apply_tags(bot_id, text)
+                                    for n in notes:
+                                        yield _sse({"type": "tool", "text": n})
+                                if not text.strip():
+                                    continue
+                                reply.append(text)
+                                yield _sse({"type": "text", "text": text})
                             elif isinstance(b, ToolUseBlock):
                                 label = b.name
                                 if b.name in ("Agent", "Task"):

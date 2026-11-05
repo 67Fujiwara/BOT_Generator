@@ -606,8 +606,25 @@ function renderRight(){
     <dt>モデル</dt><dd>${esc(b.model)}</dd>
     <dt>使えるツール</dt><dd>${b.tools.length?b.tools.map(esc).join(', '):'なし（文章だけ返す）'}</dd>
     ${b.file?`<dt>定義ファイル</dt><dd class="mono">.claude/agents/${esc(b.file)}</dd>`:''}
-  </dl>${b.id==='_auto'?'':'<div class="samples" id="samples"><h3>サンプル</h3></div>'}`;
+  </dl><div class="samples" id="memory"><h3>覚えていること</h3></div>${b.id==='_auto'?'':'<div class="samples" id="samples"><h3>サンプル</h3></div>'}`;
+  renderMemory(b);
   if(b.id!=='_auto') renderSamples(b);
+}
+/* ── 覚えていること: 「次から〜して」の指示。ボットが [[覚える: …]] で保存したものと、ここで手で足したもの ── */
+async function renderMemory(b){
+  const box=$('#memory'); if(!box) return;
+  let d={mine:[],all:[]}; try{ d=await (await fetch('/memory/'+encodeURIComponent(b.id))).json(); }catch(e){ return; }
+  if(current.id!==b.id) return;
+  const item=(it,scope)=>`<li><span>${esc(it.text)}${scope?` <em style="color:var(--muted);font-style:normal">（${scope}）</em>`:''}</span><button type="button" title="忘れる" data-key="${esc(it.text)}" data-scope="${scope?'_all':''}">×</button></li>`;
+  box.innerHTML='<h3>覚えていること <span style="font-weight:400">（「次から〜して」と言うと増えます）</span></h3>'+
+    `<div class="slot"><ul>${d.all.map(it=>item(it,'全員')).join('')}${d.mine.map(it=>item(it,'')).join('')}</ul>${(d.all.length+d.mine.length)?'':'<div class="none">まだありません</div>'}
+     <form class="task-add" style="margin-top:8px"><div class="row2"><input placeholder="手で足す（例: 返事は3行以内）" autocomplete="off"><button type="submit">追加</button></div></form></div>`;
+  box.querySelectorAll('li button').forEach(x=>x.onclick=async()=>{
+    const bot=x.dataset.scope||b.id;
+    await fetch('/memory/'+encodeURIComponent(bot)+'?key='+encodeURIComponent(x.dataset.key),{method:'DELETE'}); renderMemory(b);
+  });
+  box.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const inp=box.querySelector('input'); if(!inp.value.trim()) return;
+    const fd=new FormData(); fd.append('text',inp.value); await fetch('/memory/'+encodeURIComponent(b.id),{method:'POST',body:fd}); renderMemory(b); };
 }
 /* ── サンプル置き場: samples/<bot>/<ラベル>/ に保存。ボットは形式の参考に見る ── */
 async function renderSamples(b){
@@ -650,6 +667,7 @@ function spoken(t){
   if(/^(Read|Glob|Grep)$/.test(t)) return t==='Read'?'読んでる…':'探してる…';
   if(/^Write$/.test(t)) return '書いてる…';
   if(/送り直します/.test(t)) return '前の話が見つからないから、新しく送り直すね';
+  if(/^(覚えた|全員で覚えた|忘れた): /.test(t)) return t;
   return t.length>40 ? '作業中…（'+t.slice(0,36)+'…）' : t+'…';
 }
 function setStatus(b,text){ const it=bots.find(x=>x.id===b.id); if(it) it.status=text; statusEl.innerHTML=text?`${avatar(b)}<span>${esc(text)}</span>`:''; renderList(); }
@@ -687,7 +705,7 @@ async function send(){
     }
   }catch(e){ append('error','サーバーに届きません。python app/server.py が動いているか確認してください。'); }
   busy.delete(b.id); setStatus(b,''); sendBtn.disabled=false; input.focus();
-  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles(); loadTasks();
+  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles(); loadTasks(); if(current.id===b.id) renderMemory(b);
 }
 
 sendBtn.onclick=send;

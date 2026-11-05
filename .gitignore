@@ -13,3 +13,4 @@ samples/*
 app/claude_home/
 tests/fixtures/
 app/tasks.json
+app/memory/
