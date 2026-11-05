@@ -220,10 +220,12 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <button role="tab" aria-selected="false" data-pane="log">ログ</button>
     <button role="tab" aria-selected="false" data-pane="files">ファイル</button>
     <button role="tab" aria-selected="false" data-pane="tasks">タスク<span class="badge" id="taskBadge"></span></button>
+    <button role="tab" aria-selected="false" data-pane="memory">メモリ</button>
   </div>
   <div class="pane" id="pane-detail"></div>
   <div class="pane" id="pane-log" hidden><pre class="toollog" id="toollog">（まだ何もしていません）</pre></div>
   <div class="pane" id="pane-files" hidden><ul class="filelist" id="filelist"></ul></div>
+  <div class="pane" id="pane-memory" hidden><div class="samples" id="memory" style="border-top:0;padding-top:0;margin-top:0"><h3>覚えていること</h3></div></div>
   <div class="pane" id="pane-tasks" hidden>
     <form class="task-add" id="taskAdd">
       <input id="taskTitle" placeholder="タスク（例: ダイヤに発注書を送る）" autocomplete="off">
@@ -606,7 +608,7 @@ function renderRight(){
     <dt>モデル</dt><dd>${esc(b.model)}</dd>
     <dt>使えるツール</dt><dd>${b.tools.length?b.tools.map(esc).join(', '):'なし（文章だけ返す）'}</dd>
     ${b.file?`<dt>定義ファイル</dt><dd class="mono">.claude/agents/${esc(b.file)}</dd>`:''}
-  </dl><div class="samples" id="memory"><h3>覚えていること</h3></div>${b.id==='_auto'?'':'<div class="samples" id="samples"><h3>サンプル</h3></div>'}`;
+  </dl>${b.id==='_auto'?'':'<div class="samples" id="samples"><h3>サンプル</h3></div>'}`;
   renderMemory(b);
   if(b.id!=='_auto') renderSamples(b);
 }
@@ -616,7 +618,7 @@ async function renderMemory(b){
   let d={mine:[],all:[]}; try{ d=await (await fetch('/memory/'+encodeURIComponent(b.id))).json(); }catch(e){ return; }
   if(current.id!==b.id) return;
   const item=(it,scope)=>`<li><span>${esc(it.text)}${scope?` <em style="color:var(--muted);font-style:normal">（${scope}）</em>`:''}</span><button type="button" title="忘れる" data-key="${esc(it.text)}" data-scope="${scope?'_all':''}">×</button></li>`;
-  box.innerHTML='<h3>覚えていること <span style="font-weight:400">（「次から〜して」と言うと増えます）</span></h3>'+
+  box.innerHTML=`<h3>${esc(b.nick)}が覚えていること <span style="font-weight:400">（チャットで「次から〜して」と言うと増えます。「全員」は全ボット共通）</span></h3>`+
     `<div class="slot"><ul>${d.all.map(it=>item(it,'全員')).join('')}${d.mine.map(it=>item(it,'')).join('')}</ul>${(d.all.length+d.mine.length)?'':'<div class="none">まだありません</div>'}
      <form class="task-add" style="margin-top:8px"><div class="row2"><input placeholder="手で足す（例: 返事は3行以内）" autocomplete="off"><button type="submit">追加</button></div></form></div>`;
   box.querySelectorAll('li button').forEach(x=>x.onclick=async()=>{
@@ -808,7 +810,7 @@ $('#setTest').onclick=async()=>{
 loadSettings().then(st=>{ let seen=false; try{seen=!!localStorage.getItem('settingsSeen');}catch(e){} if(!st.api_key_set&&!st.env_key_set&&!seen) openSettings(); });
 document.querySelectorAll('.tabs button').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true');
-  ['detail','log','files','tasks'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles(); if(t.dataset.pane==='tasks') loadTasks();
+  ['detail','log','files','tasks','memory'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles(); if(t.dataset.pane==='tasks') loadTasks(); if(t.dataset.pane==='memory') renderMemory(current);
 });
 let dragDepth=0;
 document.addEventListener('dragenter',e=>{e.preventDefault();if(++dragDepth===1)document.body.classList.add('drag');});
