@@ -67,12 +67,16 @@ if (-not (Test-Path '.venv\Scripts\python.exe')) {
 & '.venv\Scripts\python.exe' -m pip install --quiet -r requirements.txt
 if ($LASTEXITCODE -ne 0) { Write-Host 'pip install failed. Check the messages above.'; exit 1 }
 
-Write-Host '[3/4] Registering autostart at Windows logon...'
+Write-Host '[3/4] Registering autostart at Windows logon (silent, no prompt)...'
+Get-ChildItem -Path $PSScriptRoot -Include *.bat,*.ps1 -Recurse | Unblock-File -ErrorAction SilentlyContinue
 $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\bot-team.lnk'
 $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-$s.TargetPath = Join-Path $PSScriptRoot 'update.bat'   # pull the latest version at logon, then start
+$s.TargetPath = 'powershell.exe'
+$upd = Join-Path $PSScriptRoot 'update.bat'   # pull the latest version at logon, then start
+$s.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"Start-Process -WindowStyle Hidden -FilePath '$upd'`""
 $s.WorkingDirectory = $PSScriptRoot
 $s.WindowStyle = 7
+$s.IconLocation = 'shell32.dll,43'
 $s.Save()
 Write-Host "      $lnk"
 
