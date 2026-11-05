@@ -139,6 +139,10 @@ def _auth_hint(text: str) -> str:
     low = text.lower()
     if "oauth" in low or "authenticat" in low or "not logged in" in low:
         return text + "\n→ Claude.ai のログインが切れています。左上の ⚙ で API キーを保存するか、コマンド窓で claude を起動して /login し直してください。"
+    if "credit balance" in low or "insufficient" in low and "credit" in low:
+        return text + "\n→ Anthropic API の前払いクレジットが切れています。console.anthropic.com の Billing でチャージすると、すぐに使えるようになります（コードの問題ではありません）。"
+    if "rate limit" in low or "overloaded" in low or "529" in low:
+        return text + "\n→ API 側が混んでいるか上限に当たっています。少し待ってからもう一度送ってください。"
     if "api key" in low:
         return text + "\n→ 左上の ⚙ から API キーを設定してください。"
     return text
