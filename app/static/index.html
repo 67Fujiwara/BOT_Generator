@@ -189,7 +189,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <body>
 
 <aside class="left">
-  <div class="left-top"><h1>bot-team</h1><button class="icon-btn" id="powerBtn" title="サーバーを終了する（次回は run.bat から）">⏻</button><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
+  <div class="left-top"><h1>bot-team <span id="ver" style="font:11px var(--mono);color:var(--muted);font-weight:400;margin-left:4px" title="版（コミット番号と日付）"></span></h1><button class="icon-btn" id="powerBtn" title="サーバーを終了する（次回は run.bat から）">⏻</button><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
   <div class="left-top" style="padding-top:0"><input id="filter" placeholder="ボットを探す"></div>
   <div class="groups" id="groups"></div>
 </aside>
@@ -437,29 +437,44 @@ $('#taskCopy').onclick=async()=>{
 $('#taskNotify').onclick=()=>{ if('Notification' in window) Notification.requestPermission().then(p=>{ $('#taskNotify').textContent=p==='granted'?'通知: 許可済み':'通知を許可'; }); };
 if('Notification' in window&&Notification.permission==='granted') $('#taskNotify').textContent='通知: 許可済み';
 
-/* 催促のルール: 期限切れ・今日まで・「すぐ」は 2 時間ごと、期間内（今月中旬など）は 1 日 1 回。あとで→2 時間止める */
+/* 催促のルール: 期限切れ・今日まで・「すぐ」は 2 時間ごと、期間内（今月中旬など）は 1 日 1 回。あとで→2 時間止める
+   見た目はジェシーのアイコン＋話し言葉（画面のポップアップもブラウザ通知も） */
+const jessieBot=()=>bots.find(b=>b.tasks)||bots.find(b=>b.id==='jessie')||{id:'jessie',nick:'ジェシー',color:'#E35D4F',shape:'jessie'};
+function remindLine(t){
+  const n=t.title.length>22?t.title.slice(0,22)+'…':t.title;
+  return {'期限切れ':`「${n}」期限すぎてるよ！`,'今日まで':`「${n}」今日までだよ、忘れてない？`,'すぐ':`「${n}」すぐやるやつ、まだ？`,'期間内':`「${n}」そろそろ手つけよ〜（${t.due_label}）`}[t.status]||`「${n}」どうなった？`;
+}
+async function jessieNotify(title,body,tag){
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  const b=jessieBot(); const icon=await avatarPng(b);
+  const n=new Notification(`${b.nick}: ${title}`,{body,icon:icon||undefined,tag,renotify:true});
+  n.onclick=()=>{ window.focus(); document.querySelector('.tabs button[data-pane="tasks"]').click(); n.close(); };
+}
 function toast(t){
   const box=$('#toasts'); if([...box.children].some(x=>x.dataset.id==String(t.id))) return;
-  const el=document.createElement('div'); el.className='toast'; el.dataset.id=t.id;
-  const why={'期限切れ':'期限を過ぎています','今日まで':'今日が期限です','すぐ':'「すぐ」のまま残っています','期間内':`${t.due_label} のタスクです`}[t.status]||t.status;
-  el.innerHTML=`<div class="tl">${esc(t.title)}</div><div>${esc(why)}（${esc(dueText(t))}）</div><div class="tb"><button class="p">完了</button><button>あとで（2時間）</button><button>閉じる</button></div>`;
+  const b=jessieBot(), line=remindLine(t);
+  const el=document.createElement('div'); el.className='toast reply'; el.dataset.id=t.id; el.style.setProperty('--c',b.color);
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip">${esc(dueText(t))}</div><div class="tb"><button class="p">完了</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
   const [bd,bs,bc]=el.querySelectorAll('button');
-  bd.onclick=async()=>{ await fetch(`/tasks/${t.id}/done`,{method:'POST'}); el.remove(); loadTasks(); };
-  bs.onclick=async()=>{ await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
-  bc.onclick=()=>el.remove();
+  bd.onclick=async e=>{ e.stopPropagation(); await fetch(`/tasks/${t.id}/done`,{method:'POST'}); el.remove(); loadTasks(); };
+  bs.onclick=async e=>{ e.stopPropagation(); await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
+  bc.onclick=e=>{ e.stopPropagation(); el.remove(); };
   box.appendChild(el);
-  if('Notification' in window&&Notification.permission==='granted'&&document.hidden) new Notification('ジェシー: '+t.title,{body:why+'（'+dueText(t)+'）'});
+  jessieNotify(line,dueText(t),'task-'+t.id);
 }
 function toastMany(list){
   const box=$('#toasts'); if(box.querySelector('.toast[data-id="many"]')) return;
-  const el=document.createElement('div'); el.className='toast'; el.dataset.id='many';
-  el.innerHTML=`<div class="tl">気になるタスクが ${list.length} 件あります</div><div>${list.map(t=>`・${esc(t.title)}（${esc(t.status)}）`).join('<br>')}</div><div class="tb"><button class="p">タスクを見る</button><button>あとで（2時間）</button><button>閉じる</button></div>`;
+  const b=jessieBot();
+  const over=list.filter(t=>t.status==='期限切れ').length, today=list.filter(t=>t.status==='今日まで').length;
+  const line = over ? `期限すぎてるのが ${over} 件あるよ！` : today ? `今日までのが ${today} 件あるよ、大丈夫？` : `気になるのが ${list.length} 件あるよ、ちょっと見て！`;
+  const el=document.createElement('div'); el.className='toast reply'; el.dataset.id='many'; el.style.setProperty('--c',b.color);
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip" style="white-space:normal">${list.map(t=>`・${esc(t.title)}（${esc(t.status)}）`).join('<br>')}</div><div class="tb"><button class="p">タスクを見る</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
   const [bv,bs,bc]=el.querySelectorAll('button');
-  bv.onclick=()=>{ document.querySelector('.tabs button[data-pane="tasks"]').click(); el.remove(); };
-  bs.onclick=async()=>{ for(const t of list) await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
-  bc.onclick=()=>el.remove();
+  bv.onclick=e=>{ e.stopPropagation(); document.querySelector('.tabs button[data-pane="tasks"]').click(); el.remove(); };
+  bs.onclick=async e=>{ e.stopPropagation(); for(const t of list) await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
+  bc.onclick=e=>{ e.stopPropagation(); el.remove(); };
   box.appendChild(el);
-  if('Notification' in window&&Notification.permission==='granted'&&document.hidden) new Notification(`ジェシー: 気になるタスクが ${list.length} 件`,{body:list.map(t=>t.title).join(' / ')});
+  jessieNotify(line,list.map(t=>t.title).join(' / '),'task-many');
 }
 async function checkReminders(){
   const now=new Date(), H=3600e3, due=[];
@@ -771,6 +786,7 @@ document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;document.body.classList.remove('drag');addFiles(e.dataTransfer.files);input.focus();});
 document.addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles(e.clipboardData.files);});
 loadBots().then(()=>select(AUTO));
+fetch('/version').then(r=>r.json()).then(v=>{ const [h,d]=(v.version||'').split(' '); $('#ver').textContent=h?`v${h}${d?' '+d.slice(5).replace('-','/'):''}`:''; $('#ver').title=`版: ${v.version}\nフォルダ: ${v.folder}`; }).catch(()=>{});
 </script>
 </body>
 </html>
