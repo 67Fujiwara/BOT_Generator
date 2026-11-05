@@ -70,6 +70,7 @@ section.center{display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .me .files{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .me .files span{font:12px var(--mono);background:rgba(255,255,255,.18);padding:2px 8px;border-radius:4px}
 .bot-msg{background:var(--bubble);align-self:flex-start;border-bottom-left-radius:3px}
+.bot-head{display:flex;align-items:center;gap:6px;margin:-2px 0 6px;font-size:12px;color:var(--muted)} .bot-head .avatar{width:22px;height:22px}
 .bot-msg>:first-child{margin-top:0} .bot-msg>:last-child{margin-bottom:0}
 .bot-msg h1,.bot-msg h2,.bot-msg h3{font-size:15px;margin:14px 0 4px}
 .bot-msg ul,.bot-msg ol{padding-left:22px;margin:4px 0}
@@ -338,6 +339,8 @@ const SHAPES={
   ham:   {d:'M22 44C14 36 14 24 20 22C26 20 32 26 34 28C44 22 60 22 70 28C74 24 82 20 86 24C90 30 86 38 82 42C92 56 90 78 76 88C64 94 40 94 28 86C18 80 14 70 16 60C8 58 6 48 12 46C14 44 18 44 22 44Z', ex:52, ey:46, dx:11, er:7},
   rex:   {d:'M6 42C20 28 44 20 64 22C84 24 94 38 92 56C90 70 82 80 68 82C60 84 54 82 50 78C46 88 34 94 20 92C10 90 4 84 6 76C10 72 24 70 44 70C40 64 30 58 20 54C14 52 8 50 6 48C4 46 4 44 6 42Z', ex:68, ey:40, dx:8, er:6.5},
 };
+const botHead=b=>`<div class="bot-head">${avatar(b,'avatar')}<span>${esc(b.nick)}</span></div>`;
+const botMsg=(b,html)=>botHead(b)+html;
 const avatar=(b,cls='avatar',id='',live=false)=>{
   const seed=hash(b.id), g='g'+(++gid), sh=SHAPES[b.shape];
   const d0=sh?sh.d:toPath(blobPts(seed,0));
@@ -395,7 +398,7 @@ async function select(b){
   log.innerHTML=''; statusEl.innerHTML='';
   const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
-  hist.forEach(m=>m.role==='me'?append('msg me',esc(m.text)+fileChips(m.files)):append('msg bot-msg',md(m.text)));
+  hist.forEach(m=>m.role==='me'?append('msg me',esc(m.text)+fileChips(m.files)):append('msg bot-msg',botMsg(b,md(m.text))));
   $('#rec').hidden=!b.record;
   if(b.tasks) document.querySelector('.tabs button[data-pane="tasks"]').click();
   input.focus();
@@ -549,7 +552,7 @@ async function toggleRec(){
   live=st;
   // 画面: 会話欄にライブ本文の枠
   log.querySelector('.empty')?.remove();
-  st.el=append('msg bot-msg live-box',`<div class="meta" style="padding:0 0 6px">● 録音中 — 文字は区切り（${chunkMs/1000}秒）ごとに出ます</div><div class="live-text"></div>`);
+  st.el=append('msg bot-msg live-box',botHead(b)+`<div class="meta" style="padding:0 0 6px">● 録音中だよ — 文字は ${chunkMs/1000} 秒ごとに出るね</div><div class="live-text"></div>`);
   const upload=async(blob,seq,startSec)=>{
     const fd=new FormData(); fd.append('audio',blob,`chunk-${seq}.webm`); fd.append('seq',seq); fd.append('startSec',startSec);
     fd.append('language','ja'); fd.append('glossary',glossary); fd.append('prev',st.prev); fd.append('meeting',meeting);
@@ -581,7 +584,7 @@ async function stopLive(){
   setStatus(st.bot,'最後の区切りを文字にしています'); await lastStopped; await st.queue;
   st.mic.getTracks().forEach(t=>t.stop()); st.tab?.getTracks().forEach(t=>t.stop()); try{ await st.ctx.close(); }catch(e){}
   applySendKey(); setStatus(st.bot,'');
-  st.el.querySelector('.meta').textContent=`■ 録音終了（${fmtT((Date.now()-st.t0)/1000)}）`;
+  st.el.querySelector('.meta').textContent=`■ 録音おわり（${fmtT((Date.now()-st.t0)/1000)}）。いま議事録にするね`;
   const text=st.lines.join('\n');
   if(!text.trim()){ append('error','文字が取れませんでした。マイクや文字起こしの設定（⚙）を確認してください。'); return; }
   const fd=new FormData(); fd.append('meeting',st.meeting); fd.append('text',text);
@@ -639,6 +642,15 @@ async function uploadSamples(b,label,files){
 function fileChips(files){ return files&&files.length?`<div class="files">${files.map(f=>`<span>${esc(f)}</span>`).join('')}</div>`:''; }
 function append(cls,html){ log.querySelector('.empty')?.remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
 log.addEventListener('click',e=>{ if(e.target.tagName==='IMG') e.target.classList.toggle('zoom'); });
+/* 作業中の表示を話し言葉に */
+function spoken(t){
+  if(/に委譲$/.test(t)) return t.replace(/に委譲$/,'に頼んでる…');
+  if(/^python |^py /.test(t)) return 'スクリプト回してる…';
+  if(/^(Read|Glob|Grep)$/.test(t)) return t==='Read'?'読んでる…':'探してる…';
+  if(/^Write$/.test(t)) return '書いてる…';
+  if(/送り直します/.test(t)) return '前の話が見つからないから、新しく送り直すね';
+  return t.length>40 ? '作業中…（'+t.slice(0,36)+'…）' : t+'…';
+}
 function setStatus(b,text){ const it=bots.find(x=>x.id===b.id); if(it) it.status=text; statusEl.innerHTML=text?`${avatar(b)}<span>${esc(text)}</span>`:''; renderList(); }
 function addFiles(list){ for(const f of list) if(!pending.some(p=>p.name===f.name&&p.size===f.size)) pending.push(f); renderAttached(); }
 function renderAttached(){ attachedEl.innerHTML=''; pending.forEach((f,i)=>{ const c=document.createElement('span'); c.className='chip'; c.innerHTML=`${esc(f.name)}<button type="button" aria-label="外す">×</button>`; c.querySelector('button').onclick=()=>{pending.splice(i,1);renderAttached();}; attachedEl.appendChild(c); }); }
@@ -654,7 +666,7 @@ async function send(){
   input.value=''; input.style.height='';
   const fd=new FormData(); fd.append('message',text); fd.append('bot',b.id==='_auto'?'':b.id);
   if(resetNext){fd.append('new_session','true');resetNext=false;} files.forEach(f=>fd.append('files',f));
-  setStatus(b,'考えています'); toollog.textContent='';
+  setStatus(b,'ちょっと待ってね…'); toollog.textContent='';
   try{
     const res=await fetch('/chat',{method:'POST',body:fd});
     const rd=res.body.getReader(), dec=new TextDecoder(); let buf='';
@@ -664,8 +676,8 @@ async function send(){
       while((i=buf.indexOf('\n\n'))>=0){
         const line=buf.slice(0,i).replace(/^data: /,''); buf=buf.slice(i+2); if(!line) continue;
         const ev=JSON.parse(line);
-        if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; if(current.id===b.id) append('msg bot-msg',md(ev.text)); }
-        else if(ev.type==='tool'){ setStatus(b,ev.text); toollog.textContent+=ev.text+'\n'; }
+        if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; if(current.id===b.id) append('msg bot-msg',botMsg(b,md(ev.text))); }
+        else if(ev.type==='tool'){ setStatus(b,spoken(ev.text)); toollog.textContent+=ev.text+'\n'; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`);
           const away=document.hidden||!document.hasFocus()||current.id!==b.id;
           if(replyText&&(away||(notifySec>=0&&ev.sec>=notifySec))) notifyReply(b,replyText,ev.sec); }
