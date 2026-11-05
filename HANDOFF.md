@@ -74,6 +74,7 @@ bot-team/
     server.py             FastAPI。ブラウザからの文＋ファイルを Claude Agent SDK に渡す
                           ボット指定時は親を挟まず直接呼ぶ（定義本文=システムプロンプト、tools/model も定義どおり、setting_sources=[]）
                           「ウッディ」（おまかせ役、id は _auto のまま）だけ親エージェント経由で委譲（CLAUDE.md を読む）。顔だけのシルエット shape: woody
+                          ウッディが伝える他ボットの返事は行頭「名前：」で書く規則（CLAUDE.md）。画面の botChips() が行頭の「🥔 ポテト」「**ハム:**」「レックス：」を本物のアイコン付きの名前に置き換える（絵文字は捨てる。名前の後に文が続く行は触らない）
                           GET/POST /settings で API キーを app/config.json に保存、POST /settings/test で疎通確認
                           ボットごとに SDK セッションを保持（会話の続き）、history.json に会話ログ
                           エンドポイント: GET / , /bots , /history/{bot} , /inbox , /settings , /samples/{bot} , /version ,
