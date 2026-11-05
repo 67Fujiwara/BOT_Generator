@@ -291,6 +291,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <div class="btns" style="margin-top:10px"><span class="spacer"></span><button type="button" id="trSave">文字起こし設定を保存</button></div>
   </details>
   <div class="set-status" id="setStatus"></div>
+  <div id="setVersion" style="font-size:11px;color:var(--muted);margin-top:6px;font-family:var(--mono)"></div>
   <div class="btns">
     <button type="button" id="setTest">接続テスト</button>
     <button type="button" id="setClear">キーを削除</button>
@@ -724,7 +725,8 @@ $('#openaiClear').onclick=async()=>{
   const fd=new FormData(); fd.append('openai_api_key','');
   await fetch('/settings',{method:'POST',body:fd}); await loadSettings(); showSet('文字起こしキーを削除しました。','ok');
 };
-function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); dlg.showModal(); apiKey.focus(); }
+function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); dlg.showModal(); apiKey.focus();
+  fetch('/version').then(r=>r.json()).then(v=>{ $('#setVersion').textContent=`版: ${v.version}　フォルダ: ${v.folder}`; }).catch(()=>{}); }
 $('#settingsBtn').onclick=()=>openSettings();
 $('#powerBtn').onclick=async()=>{
   if(!confirm('サーバーを終了します。次に使うときは run.bat をダブルクリックしてください。')) return;

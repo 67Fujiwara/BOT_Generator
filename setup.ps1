@@ -70,7 +70,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'pip install failed. Check the messages ab
 Write-Host '[3/4] Registering autostart at Windows logon...'
 $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\bot-team.lnk'
 $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-$s.TargetPath = Join-Path $PSScriptRoot 'run.bat'
+$s.TargetPath = Join-Path $PSScriptRoot 'update.bat'   # pull the latest version at logon, then start
 $s.WorkingDirectory = $PSScriptRoot
 $s.WindowStyle = 7
 $s.Save()

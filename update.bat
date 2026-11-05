@@ -1,14 +1,21 @@
 @echo off
-rem Update bot-team to the latest version and (re)start it.
-rem Local edits to tracked files are discarded (settings, inbox, samples and keys are untouched).
+rem Update bot-team to the latest version and (re)start it. Used by the logon autostart too.
+rem Local edits to tracked files are discarded (settings, inbox, samples, tasks and keys are untouched).
 cd /d %~dp0
-git checkout -- .
+if not exist .git (
+  echo This folder is not a git clone, so it cannot be updated. Starting as is.
+  call run.bat
+  timeout /t 5 >nul
+  exit /b 0
+)
+git checkout -- . >nul 2>&1
 git pull
 if errorlevel 1 (
   echo.
-  echo git pull failed. Copy the message above and ask Claude.
-  pause
-  exit /b 1
+  echo git pull failed (offline?). Starting the current version as is.
+  call run.bat
+  timeout /t 8 >nul
+  exit /b 0
 )
 if exist .venv\Scripts\python.exe (
   .venv\Scripts\python.exe -m pip install -q -r requirements.txt
@@ -16,5 +23,5 @@ if exist .venv\Scripts\python.exe (
   python -m pip install -q -r requirements.txt
 )
 call run.bat
-echo Updated. Press Ctrl+F5 in the browser to reload the page.
+echo Updated. Reload the page in the browser if it was already open.
 timeout /t 5 >nul

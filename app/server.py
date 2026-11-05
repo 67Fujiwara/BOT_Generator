@@ -54,6 +54,20 @@ BOT_RULES = ROOT / ".claude" / "bot_rules.md"   # 全ボット共通ルール。
 HOST, PORT = "127.0.0.1", 8765
 CODE_STAMP = f"{os.path.getmtime(__file__):.0f}-{os.path.getsize(__file__)}"   # 起動時のコードの印。古い常駐を見分ける
 
+
+def _git_version() -> str:
+    """表示用の版: 'a6c7090 2026-11-05' のような短いコミット番号と日付。git が無ければ 'zip'。"""
+    import subprocess
+    try:
+        out = subprocess.run(["git", "log", "-1", "--format=%h %cd", "--date=short"], cwd=ROOT,
+                             capture_output=True, text=True, timeout=5)
+        return out.stdout.strip() or "zip"
+    except Exception:  # noqa: BLE001
+        return "zip"
+
+
+VERSION = _git_version()
+
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
 # ボットが作った画像（検図の切り抜きなど）をチャットに表示するため、inbox と samples だけ読み取り公開する
@@ -376,7 +390,7 @@ def task_action(task_id: int, action: str, text: str = Form("")):
 
 @app.get("/version")
 def version():
-    return {"stamp": CODE_STAMP}
+    return {"stamp": CODE_STAMP, "version": VERSION, "folder": str(ROOT)}
 
 
 @app.post("/shutdown")
