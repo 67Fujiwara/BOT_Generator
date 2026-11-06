@@ -124,6 +124,10 @@ bot-team/
 - 同じボットへの同時送信は `_locks`（asyncio.Lock）で直列化。「聞く」の続きは鍵を外してから送る（自分に再送するため）。
 - システムプロンプトには `_team_block()` で仲間の一覧（呼び名: 説明）を自動で足す。ウッディも連絡先にできる（親経由なので遅い）。
 
+## 大きなメッセージ（2026-11-06）
+
+claude-agent-sdk は Claude Code からの 1 メッセージが 1MB を超えると `CLIJSONDecodeError: JSON message exceeded maximum buffer size` で落ちる（ページ画像の Read や長い Bash 出力で起きた）。`_build_opts()` で `max_buffer_size=MAX_MSG_BYTES`（64MB）にしている。
+
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 
 | 経路 | 時間 | 備考 |

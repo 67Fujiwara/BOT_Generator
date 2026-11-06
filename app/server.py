@@ -143,6 +143,8 @@ def _auth_hint(text: str) -> str:
         return text + "\n→ Anthropic API の前払いクレジットが切れています。console.anthropic.com の Billing でチャージすると、すぐに使えるようになります（コードの問題ではありません）。"
     if "rate limit" in low or "overloaded" in low or "529" in low:
         return text + "\n→ API 側が混んでいるか上限に当たっています。少し待ってからもう一度送ってください。"
+    if "maximum buffer size" in low:
+        return text + "\n→ 読んだファイルや出力が大きすぎます（1 回の受け取り上限 64MB）。ページ数を絞る、画像を小さくする、出力を要約するなどで小さくしてください。"
     if "api key" in low:
         return text + "\n→ 左上の ⚙ から API キーを設定してください。"
     return text
@@ -538,6 +540,7 @@ async def test_settings():
 
 _locks: dict[str, "asyncio.Lock"] = {}       # bot id → 同じボットへ同時に送らないための鍵
 MAX_HOPS = 3                                   # ボット間の連絡の深さの上限（無限の往復を防ぐ）
+MAX_MSG_BYTES = 64 * 1024 * 1024               # Claude Code から受ける 1 メッセージの上限。既定 1MB だと図面のページ画像や長い出力で落ちる
 
 
 def _relay_mod():
@@ -601,6 +604,7 @@ def _build_opts(bot_id: str, agent: dict | None):
             permission_mode="acceptEdits",
             resume=_sessions.get(bot_id),
             env=_sdk_env(),
+            max_buffer_size=MAX_MSG_BYTES,
         )
     # おまかせ: 親エージェントが CLAUDE.md を見て適したボットに委譲する
     return ClaudeAgentOptions(
@@ -610,6 +614,7 @@ def _build_opts(bot_id: str, agent: dict | None):
         permission_mode="acceptEdits",
         resume=_sessions.get(bot_id),
         env=_sdk_env(),
+        max_buffer_size=MAX_MSG_BYTES,
     )
 
 
