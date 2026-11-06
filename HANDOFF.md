@@ -117,6 +117,13 @@ bot-team/
 - 2026-11-03 追記: `claude-agent-sdk` 0.2.177 のソースと突き合わせ、`server.py` が使う名前（`query`, `ClaudeAgentOptions`, `AssistantMessage`, `ResultMessage`, `TextBlock`, `ToolUseBlock`）と引数（`cwd`, `setting_sources=["project"]`, `allowed_tools`, `permission_mode="acceptEdits"`, `resume`）、`ResultMessage.session_id` はすべて存在することを確認済み。wheel に Claude Code CLI 2.1.317 が同梱されているので、別途 `npm install -g @anthropic-ai/claude-code` は不要。実際に API を呼ぶところまでは未実行。
 - 同日、`scripts/extract_items.py` と `compare_lists.py` を合成データ（Excel の BOM と CSV の発注書、列名違い・全角型式・小計行入り）で再確認し、漏れ/余分/数量不一致/単価不一致/金額合計差がすべて検出された。
 
+## ボット同士の連絡（2026-11-06）
+
+- 返事の中の `[[頼む: 相手: 内容]]` / `[[聞く: 相手: 内容]]` を `scripts/relay.py` が拾い、`server.py` の `_talk()` が相手に送る（再帰、`MAX_HOPS=3`）。「聞く」は相手の返事を「〇〇からの返事」として送り手に戻して続きを生成する。
+- SSE の text / tool イベントに `bot` が付き、画面は相手のアイコンで吹き出しを出す。`relay` イベントで「送り手 → 相手「内容」」の 1 行。履歴は送り手側に `relay` と `bot`(bot=相手)、相手側に `me`(from=送り手) として残る。
+- 同じボットへの同時送信は `_locks`（asyncio.Lock）で直列化。「聞く」の続きは鍵を外してから送る（自分に再送するため）。
+- システムプロンプトには `_team_block()` で仲間の一覧（呼び名: 説明）を自動で足す。ウッディも連絡先にできる（親経由なので遅い）。
+
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 
 | 経路 | 時間 | 備考 |

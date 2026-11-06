@@ -536,6 +536,177 @@ async def test_settings():
         return {"ok": False, "error": _auth_hint(f"{type(e).__name__}: {e}")}
 
 
+_locks: dict[str, "asyncio.Lock"] = {}       # bot id → 同じボットへ同時に送らないための鍵
+MAX_HOPS = 3                                   # ボット間の連絡の深さの上限（無限の往復を防ぐ）
+
+
+def _relay_mod():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("relay", ROOT / "scripts" / "relay.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _nick_of(bot_id: str) -> str:
+    if bot_id == "_auto":
+        return "ウッディ"
+    return next((b["nick"] for b in list_bots() if b["id"] == bot_id), bot_id)
+
+
+def _find_bot(name: str) -> tuple[str | None, str]:
+    """「ジェシー」「jessie」「ウッディ」→ (id, 呼び名)。見つからなければ (None, 名前)。"""
+    name = name.strip().strip("「」\"' ")
+    if name in ("ウッディ", "_auto", "woody"):
+        return "_auto", "ウッディ"
+    for b in list_bots():
+        if name in (b["nick"], b["id"]):
+            return b["id"], b["nick"]
+    return None, name
+
+
+def _team_block(bot_id: str) -> str:
+    """システムプロンプトに足す「チームの仲間」。連絡のやり方は bot_rules.md の共通ルール。"""
+    lines = ["## チームの仲間（[[頼む: 名前: 内容]] / [[聞く: 名前: 内容]] で連絡できる。やり方は共通ルール「仲間に連絡する」）"]
+    if bot_id != "_auto":
+        lines.append("- ウッディ: おまかせ役。誰に頼むか迷ったらウッディ")
+    for b in list_bots():
+        if b["id"] != bot_id:
+            lines.append(f"- {b['nick']}: {b['desc'][:90]}")
+    return "\n".join(lines)
+
+
+def _build_opts(bot_id: str, agent: dict | None):
+    from claude_agent_sdk import ClaudeAgentOptions
+    if agent:
+        # 直接呼び: ボット定義の本文をシステムプロンプトに、ツールとモデルも定義どおり。
+        # ツールなしのボットは Claude Code の既定プロンプトも外して文章だけ返す。
+        tools = agent["tools"]
+        body = agent["body"]
+        if BOT_RULES.exists():
+            body += "\n\n" + BOT_RULES.read_text(encoding="utf-8").strip()
+        body += "\n\n" + _team_block(bot_id)
+        remembered = _memory_mod().prompt_block(bot_id)
+        if remembered:
+            body += "\n\n" + remembered
+        sys_prompt = ({"type": "preset", "preset": "claude_code", "append": body}
+                      if tools else body)
+        return ClaudeAgentOptions(
+            cwd=str(ROOT),
+            system_prompt=sys_prompt,
+            model=agent.get("model") or None,
+            tools=tools,
+            allowed_tools=tools,
+            setting_sources=[],                  # CLAUDE.md の「必ず委譲」を読ませない
+            permission_mode="acceptEdits",
+            resume=_sessions.get(bot_id),
+            env=_sdk_env(),
+        )
+    # おまかせ: 親エージェントが CLAUDE.md を見て適したボットに委譲する
+    return ClaudeAgentOptions(
+        cwd=str(ROOT),
+        setting_sources=["project"],            # .claude/agents と CLAUDE.md を読む
+        allowed_tools=["Read", "Glob", "Grep", "Bash", "Agent", "Task"],
+        permission_mode="acceptEdits",
+        resume=_sessions.get(bot_id),
+        env=_sdk_env(),
+    )
+
+
+async def _talk(bot_id: str, prompt: str, *, depth: int = 0):
+    """1 ボットに 1 回送り、出来事を dict で yield する（text / tool / relay）。
+    返事の中の [[頼む: 相手: 内容]] / [[聞く: 相手: 内容]] を拾って相手にも送り、その分も yield する。
+    「聞く」は相手の返事を本人に戻して回答を続けさせる。深さは MAX_HOPS まで。"""
+    import asyncio
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock, query
+
+    agent = _agent_def(bot_id) if bot_id != "_auto" else None
+    opts = _build_opts(bot_id, agent)
+    reply: list[str] = []
+    relays: list[dict] = []
+
+    async def run(options):
+        async for msg in query(prompt=prompt, options=options):
+            if isinstance(msg, AssistantMessage):
+                for b in msg.content:
+                    if isinstance(b, TextBlock) and b.text.strip():
+                        text = b.text
+                        if "[[" in text:
+                            text, notes = _memory_mod().apply_tags(bot_id, text)
+                            for n in notes:
+                                yield {"type": "tool", "bot": bot_id, "text": n}
+                            text, found = _relay_mod().parse(text)
+                            relays.extend(found)
+                        if not text.strip():
+                            continue
+                        reply.append(text)
+                        yield {"type": "text", "bot": bot_id, "text": text}
+                    elif isinstance(b, ToolUseBlock):
+                        label = b.name
+                        if b.name in ("Agent", "Task"):
+                            label = f"{b.input.get('subagent_type', '')} に委譲"
+                        elif b.name == "Bash":
+                            label = (b.input.get("command") or "")[:90]
+                        yield {"type": "tool", "bot": bot_id, "text": label}
+            elif isinstance(msg, ResultMessage):
+                sid = getattr(msg, "session_id", None)
+                if sid:
+                    _sessions[bot_id] = sid
+
+    lock = _locks.setdefault(bot_id, asyncio.Lock())
+    async with lock:                                   # 同じボットへ同時に 2 つ送らない（会話の続きが壊れる）
+        try:
+            async for ev in run(opts):
+                yield ev
+        except Exception as e:  # noqa: BLE001
+            # 「前の会話が見つからない」は続きを諦めて新しい会話でやり直す（設定置き場の切替・履歴掃除の後に起きる）
+            if "No conversation found" in str(e) and getattr(opts, "resume", None):
+                _sessions.pop(bot_id, None)
+                reply.clear()
+                relays.clear()
+                yield {"type": "tool", "bot": bot_id, "text": "前の会話が見つからないので新しい会話で送り直します"}
+                opts.resume = None
+                async for ev in run(opts):
+                    yield ev
+            else:
+                raise
+    _history.setdefault(bot_id, []).append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
+    _save_history()
+
+    # 仲間への連絡（鍵は外してから。「聞く」で自分にもう一度送るため）
+    me = _nick_of(bot_id)
+    for r in relays:
+        tid, tnick = _find_bot(r["to"])
+        if tid is None or tid == bot_id:
+            yield {"type": "tool", "bot": bot_id, "text": f"連絡先が見つからない: {r['to']}"}
+            continue
+        if depth + 1 >= MAX_HOPS:
+            yield {"type": "tool", "bot": bot_id, "text": f"連絡の回数が上限なので {tnick} には送らない"}
+            continue
+        yield {"type": "relay", "from": bot_id, "from_nick": me, "to": tid, "to_nick": tnick,
+               "kind": r["kind"], "text": r["text"]}
+        now = time.time()
+        _history.setdefault(bot_id, []).append({"role": "relay", "from": me, "to": tnick, "to_id": tid,
+                                                "kind": r["kind"], "text": r["text"], "at": now})
+        _history.setdefault(tid, []).append({"role": "me", "from": me, "text": r["text"], "at": now})
+        tprompt = (f"{me}からの連絡です（本人ではなく仲間のボットから。本人に確認したいことがあれば、そのまま聞き返す文を返してよい）:\n"
+                   f"{r['text']}")
+        if tid == "_auto":
+            tprompt = "ウッディ、" + tprompt
+        answer: list[str] = []
+        async for ev in _talk(tid, tprompt, depth=depth + 1):
+            if ev["type"] == "text" and ev.get("bot") == tid:
+                answer.append(ev["text"])
+            yield ev
+        _history[bot_id].append({"role": "bot", "bot": tid, "text": "\n\n".join(answer), "at": time.time()})
+        _save_history()
+        if r["kind"] == "聞く":
+            follow = (f"{tnick}からの返事:\n{chr(10).join(answer) if answer else '（返事なし）'}\n\n"
+                      "上の返事を使って、本人への回答を続けてください。相手に聞き返しが必要なら本人に伝えてください。")
+            async for ev in _talk(bot_id, follow, depth=depth + 1):
+                yield ev
+
+
 @app.post("/chat")
 async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool = Form(False),
                files: list[UploadFile] = File(default=[])):
@@ -585,89 +756,10 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
 
     async def stream():
         yield _sse({"type": "start", "prompt": prompt})
-        reply = []
+        t0 = time.time()
         try:
-            from claude_agent_sdk import ClaudeAgentOptions, query
-            from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
-
-            if agent:
-                # 直接呼び: ボット定義の本文をシステムプロンプトに、ツールとモデルも定義どおり。
-                # ツールなしのボットは Claude Code の既定プロンプトも外して文章だけ返す。
-                tools = agent["tools"]
-                body = agent["body"]
-                if BOT_RULES.exists():
-                    body += "\n\n" + BOT_RULES.read_text(encoding="utf-8").strip()
-                remembered = _memory_mod().prompt_block(bot_id)
-                if remembered:
-                    body += "\n\n" + remembered
-                sys_prompt = ({"type": "preset", "preset": "claude_code", "append": body}
-                              if tools else body)
-                opts = ClaudeAgentOptions(
-                    cwd=str(ROOT),
-                    system_prompt=sys_prompt,
-                    model=agent.get("model") or None,
-                    tools=tools,
-                    allowed_tools=tools,
-                    setting_sources=[],                  # CLAUDE.md の「必ず委譲」を読ませない
-                    permission_mode="acceptEdits",
-                    resume=_sessions.get(bot_id),
-                    env=_sdk_env(),
-                )
-            else:
-                # おまかせ: 親エージェントが CLAUDE.md を見て適したボットに委譲する
-                opts = ClaudeAgentOptions(
-                    cwd=str(ROOT),
-                    setting_sources=["project"],            # .claude/agents と CLAUDE.md を読む
-                    allowed_tools=["Read", "Glob", "Grep", "Bash", "Agent", "Task"],
-                    permission_mode="acceptEdits",
-                    resume=_sessions.get(bot_id),
-                    env=_sdk_env(),
-                )
-            t0 = time.time()
-
-            async def run(options):
-                """1 回分の送受信。SSE イベントを yield する。"""
-                async for msg in query(prompt=prompt, options=options):
-                    if isinstance(msg, AssistantMessage):
-                        for b in msg.content:
-                            if isinstance(b, TextBlock) and b.text.strip():
-                                text = b.text
-                                if "[[" in text:
-                                    text, notes = _memory_mod().apply_tags(bot_id, text)
-                                    for n in notes:
-                                        yield _sse({"type": "tool", "text": n})
-                                if not text.strip():
-                                    continue
-                                reply.append(text)
-                                yield _sse({"type": "text", "text": text})
-                            elif isinstance(b, ToolUseBlock):
-                                label = b.name
-                                if b.name in ("Agent", "Task"):
-                                    label = f"{b.input.get('subagent_type', '')} に委譲"
-                                elif b.name == "Bash":
-                                    label = (b.input.get("command") or "")[:90]
-                                yield _sse({"type": "tool", "text": label})
-                    elif isinstance(msg, ResultMessage):
-                        sid = getattr(msg, "session_id", None)
-                        if sid:
-                            _sessions[bot_id] = sid
-
-            try:
-                async for ev in run(opts):
-                    yield ev
-            except Exception as e:  # noqa: BLE001
-                # 「前の会話が見つからない」は続きを諦めて新しい会話でやり直す（設定置き場の切替・履歴掃除の後に起きる）
-                if "No conversation found" in str(e) and getattr(opts, "resume", None):
-                    _sessions.pop(bot_id, None)
-                    reply.clear()
-                    yield _sse({"type": "tool", "text": "前の会話が見つからないので新しい会話で送り直します"})
-                    opts.resume = None
-                    async for ev in run(opts):
-                        yield ev
-                else:
-                    raise
-            _history[bot_id].append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
-            _save_history()
+            async for ev in _talk(bot_id, prompt):
+                yield _sse(ev)
             yield _sse({"type": "done", "sec": round(time.time() - t0, 1)})
         except ImportError:
             yield _sse({"type": "error", "text": "claude-agent-sdk が入っていません: pip install claude-agent-sdk"})

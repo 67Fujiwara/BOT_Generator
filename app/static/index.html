@@ -72,6 +72,8 @@ section.center{display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .bot-msg{background:var(--bubble);align-self:flex-start;border-bottom-left-radius:3px}
 .bot-head{display:flex;align-items:center;gap:6px;margin:-2px 0 6px;font-size:12px;color:var(--muted)} .bot-head .avatar{width:22px;height:22px}
 .bot-chip{display:inline-flex;align-items:center;gap:5px;font-weight:600;vertical-align:-3px} .bot-chip .avatar{width:20px;height:20px;flex:none}
+.relay{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:2px 0 6px;align-self:flex-start;max-width:720px} .relay .avatar{width:18px;height:18px;flex:none} .relay b{color:var(--fg)} .relay .arrow{opacity:.6} .relay q{font-style:normal;quotes:'「' '」'}
+.msg.me.from-bot{background:var(--bg2,rgba(127,127,127,.12));color:var(--fg)} .msg.me.from-bot .bot-head{margin-bottom:4px}
 .bot-msg>:first-child{margin-top:0} .bot-msg>:last-child{margin-bottom:0}
 .bot-msg h1,.bot-msg h2,.bot-msg h3{font-size:15px;margin:14px 0 4px}
 .bot-msg ul,.bot-msg ol{padding-left:22px;margin:4px 0}
@@ -345,6 +347,22 @@ const SHAPES={
 };
 const botHead=b=>`<div class="bot-head">${avatar(b,'avatar')}<span>${esc(b.nick)}</span></div>`;
 const botMsg=(b,html)=>botHead(b)+html;
+const botOf=id=>id==='_auto'?AUTO:(bots.find(x=>x.id===id)||null);
+/* ボット間の連絡の 1 行（送り手 → 相手「内容」） */
+function relayLine(fromId,fromNick,toId,toNick,kind,text){
+  const f=botOf(fromId), t=botOf(toId);
+  return `<div class="relay">${f?avatar(f):''}<b>${esc(fromNick)}</b><span class="arrow">${kind==='聞く'?'→ 聞く →':'→ 頼む →'}</span>${t?avatar(t):''}<b>${esc(toNick)}</b><q>${esc(text)}</q></div>`;
+}
+/* 履歴 1 件を描く。me: 本人（from があれば仲間からの連絡）/ bot: 返事（bot があれば仲間の返事）/ relay: 連絡の 1 行 */
+function renderHist(b,m){
+  if(m.role==='relay') return append('relay-wrap',relayLine(b.id,m.from,m.to_id,m.to,m.kind,m.text));
+  if(m.role==='me'){
+    if(m.from){ const f=bots.find(x=>x.nick===m.from)||(m.from==='ウッディ'?AUTO:null); return append('msg me from-bot',(f?`<div class="bot-head">${avatar(f)}<span>${esc(m.from)}からの連絡</span></div>`:'')+esc(m.text)); }
+    return append('msg me',esc(m.text)+fileChips(m.files));
+  }
+  const who=(m.bot&&botOf(m.bot))||b;
+  return append('msg bot-msg',botMsg(who,md(botChips(m.text))));
+}
 /* ウッディが他のボットの返事を伝えるとき、行頭の「🥔 ポテト」「**ハム:**」「レックス：」などを本物のアイコン付きの名前に置き換える
    （絵文字はボットが勝手に付けるので捨てる）。行頭以外の名前や、名前の後に文が続く行（「ポテトに頼んだよ」）はそのまま */
 function botChips(text){
@@ -416,7 +434,7 @@ async function select(b){
   log.innerHTML=''; statusEl.innerHTML='';
   const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
-  hist.forEach(m=>m.role==='me'?append('msg me',esc(m.text)+fileChips(m.files)):append('msg bot-msg',botMsg(b,md(botChips(m.text)))));
+  hist.forEach(m=>renderHist(b,m));
   $('#rec').hidden=!b.record;
   /* ジェシー（タスク役）を選んだらタスクタブ、それ以外は詳細タブに戻す */
   document.querySelector(`.tabs button[data-pane="${b.tasks?'tasks':'detail'}"]`).click();
@@ -713,8 +731,9 @@ async function send(){
       while((i=buf.indexOf('\n\n'))>=0){
         const line=buf.slice(0,i).replace(/^data: /,''); buf=buf.slice(i+2); if(!line) continue;
         const ev=JSON.parse(line);
-        if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; if(current.id===b.id) append('msg bot-msg',botMsg(b,md(botChips(ev.text)))); }
-        else if(ev.type==='tool'){ setStatus(b,spoken(ev.text)); toollog.textContent+=ev.text+'\n'; }
+        if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; const who=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot))||b; if(current.id===b.id) append('msg bot-msg',botMsg(who,md(botChips(ev.text)))); }
+        else if(ev.type==='tool'){ const w=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot)); setStatus(b,(w?w.nick+'が':'')+spoken(ev.text)); toollog.textContent+=ev.text+'\n'; }
+        else if(ev.type==='relay'){ if(current.id===b.id) append('relay-wrap',relayLine(ev.from,ev.from_nick,ev.to,ev.to_nick,ev.kind,ev.text)); setStatus(b,`${ev.to_nick}に${ev.kind==='聞く'?'聞いてる':'頼んでる'}…`); toollog.textContent+=`→ ${ev.to_nick}: ${ev.text}\n`; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`);
           const away=document.hidden||!document.hasFocus()||current.id!==b.id;
           if(replyText&&(away||(notifySec>=0&&ev.sec>=notifySec))) notifyReply(b,replyText,ev.sec); }
