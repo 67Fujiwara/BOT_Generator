@@ -521,6 +521,7 @@ async function checkReminders(){
   for(const t of tasksCache){
     if(t.done||!t.due_end) continue;
     if(t.snooze_until&&new Date(t.snooze_until)>now) continue;
+    if(t.created&&(now-new Date(t.created))<1*H) continue;   // 登録したばかり（1 時間以内）は催促しない。登録した瞬間に「忘れてない？」が出ないように
     const last=t.last_reminded?new Date(t.last_reminded):null, since=last?now-last:Infinity;
     let fire=false;
     if(t.status==='期限切れ'||t.status==='今日まで') fire=since>2*H;
