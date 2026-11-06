@@ -125,7 +125,8 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .tasklist li{display:grid;grid-template-columns:22px 1fr auto auto;gap:4px 6px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
 .tasklist input[type=checkbox]{width:16px;height:16px;margin-top:3px;cursor:pointer}
 .tasklist .tt{font-size:13.5px;line-height:1.5;word-break:break-word} .tasklist li.done .tt{color:var(--muted);text-decoration:line-through}
-.tasklist .due{font-size:12px;color:var(--muted);margin-top:2px}
+.tasklist .due{font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;border-bottom:1px dotted transparent} .tasklist .due:hover{color:var(--fg);border-bottom-color:var(--muted)}
+.duepick{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px} .duepick button{font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:var(--bg,transparent);color:var(--fg);cursor:pointer} .duepick button:hover{border-color:var(--muted)} .duepick input{font-size:12px;padding:3px 6px;width:9em;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg)} .duepick .hint{font-size:11px;color:var(--muted);width:100%}
 .tasklist .st{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--bubble);color:var(--muted);white-space:nowrap}
 .tasklist .st.期限切れ,.tasklist .st.すぐ{background:var(--err);color:#fff} .tasklist .st.今日まで{background:var(--caution);color:#1A2230} .tasklist .st.期間内{background:var(--accent);color:#fff}
 .tasklist .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 2px} .tasklist .x:hover{color:var(--err)}
@@ -454,11 +455,33 @@ async function loadTasks(){
     li.innerHTML=`<input type="checkbox" ${t.done?'checked':''} title="${t.done?'未完了に戻す':'完了にする'}"><div><div class="tt">${esc(t.title)}</div><div class="due">${esc(dueText(t))}</div></div><span class="st ${esc(t.status)}">${esc(t.status)}</span>${t.note?`<div class="note">${esc(t.note)}</div>`:''}<button class="x" title="削除">×</button>`;
     li.querySelector('input').onchange=async e=>{ await fetch(`/tasks/${t.id}/${e.target.checked?'done':'undone'}`,{method:'POST'}); loadTasks(); };
     li.querySelector('.x').onclick=async()=>{ if(confirm(`「${t.title}」を削除しますか？`)){ await fetch(`/tasks/${t.id}/remove`,{method:'POST'}); loadTasks(); } };
+    li.querySelector('.due').title='クリックで納期を変える（延長など）';
+    li.querySelector('.due').onclick=()=>duePick(t,li);
     ul.appendChild(li);
   });
   $('#taskCount').textContent=`未完了 ${open.length} 件`;
   $('#taskShowDone').textContent=showDone?'完了を隠す':'完了も表示';
   checkReminders();
+}
+/* 納期の変更（延長）: 行の納期をクリック → 選択肢。自由入力はジェシーと同じ言い方（明後日 / 来週後半 / 11/20 / 金曜 …） */
+async function setDue(t,text){
+  const fd=new FormData(); fd.append('text',text);
+  const r=await (await fetch(`/tasks/${t.id}/due`,{method:'POST',body:fd})).json();
+  if(!r.ok){ alert(r.error||'納期を変えられませんでした'); return false; }
+  loadTasks(); return true;
+}
+function duePick(t,li){
+  if(li.querySelector('.duepick')){ li.querySelector('.duepick').remove(); return; }
+  document.querySelectorAll('.duepick').forEach(x=>x.remove());
+  const box=document.createElement('div'); box.className='duepick';
+  const choices=['明日','明後日','3日後','今週中','来週','来週後半','月末','なし'];
+  box.innerHTML=choices.map(c=>`<button type="button" data-d="${c}">${c==='なし'?'納期なし':c}</button>`).join('')+`<input placeholder="自由に（11/20 など）"><button type="button" class="ok">変更</button><button type="button" class="no">やめる</button><div class="hint">いまの納期: ${esc(dueText(t))}</div>`;
+  box.querySelectorAll('button[data-d]').forEach(b=>b.onclick=()=>setDue(t,b.dataset.d));
+  const inp=box.querySelector('input');
+  box.querySelector('.ok').onclick=()=>{ if(inp.value.trim()) setDue(t,inp.value.trim()); };
+  inp.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); if(inp.value.trim()) setDue(t,inp.value.trim()); } if(e.key==='Escape') box.remove(); };
+  box.querySelector('.no').onclick=()=>box.remove();
+  li.appendChild(box); inp.focus();
 }
 $('#taskAdd').onsubmit=async e=>{
   e.preventDefault(); const fd=new FormData(); fd.append('title',$('#taskTitle').value); fd.append('due',$('#taskDue').value);
@@ -494,9 +517,10 @@ function toast(t){
   const box=$('#toasts'); if([...box.children].some(x=>x.dataset.id==String(t.id))) return;
   const b=jessieBot(), line=remindLine(t);
   const el=document.createElement('div'); el.className='toast reply'; el.dataset.id=t.id; el.style.setProperty('--c',b.color);
-  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip">${esc(dueText(t))}</div><div class="tb"><button class="p">完了</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
-  const [bd,bs,bc]=el.querySelectorAll('button');
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip">${esc(dueText(t))}</div><div class="tb"><button class="p">完了</button><button>明日に延ばす</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
+  const [bd,bt,bs,bc]=el.querySelectorAll('button');
   bd.onclick=async e=>{ e.stopPropagation(); await fetch(`/tasks/${t.id}/done`,{method:'POST'}); el.remove(); loadTasks(); };
+  bt.onclick=async e=>{ e.stopPropagation(); if(await setDue(t,'明日')) el.remove(); };
   bs.onclick=async e=>{ e.stopPropagation(); await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
   bc.onclick=e=>{ e.stopPropagation(); el.remove(); };
   box.appendChild(el);
