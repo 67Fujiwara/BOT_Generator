@@ -431,7 +431,7 @@ function renderList(){
 }
 async function select(b){
   current=b; renderList(); renderRight();
-  $('#topAvatar').outerHTML=avatar(b,'avatar','topAvatar'); $('#topName').textContent=b.nick;
+  $('#topAvatar').outerHTML=avatar(b,'avatar','topAvatar',true); $('#topName').textContent=b.nick;
   log.innerHTML=''; statusEl.innerHTML='';
   const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
@@ -660,7 +660,7 @@ $('#rec').onclick=toggleRec;
 window.addEventListener('beforeunload',e=>{ if(live){ e.preventDefault(); e.returnValue=''; } });
 function renderRight(){
   const b=current;
-  $('#rAvatar').outerHTML=avatar(b,'avatar','rAvatar'); $('#rName').textContent=b.nick;
+  $('#rAvatar').outerHTML=avatar(b,'avatar','rAvatar',true); $('#rName').textContent=b.nick;   // 右パネルの大きいアイコンも選択中なので動かす（息・まばたき・目線）
   $('#pane-detail').innerHTML=`<dl>
     <dt>役割</dt><dd>${esc(b.desc)}</dd>
     <dt>グループ</dt><dd>${esc(b.group||'—')}</dd>
