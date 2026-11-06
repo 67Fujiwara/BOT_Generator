@@ -854,6 +854,18 @@ document.addEventListener('dragleave',()=>{if(--dragDepth===0)document.body.clas
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;document.body.classList.remove('drag');addFiles(e.dataTransfer.files);input.focus();});
 document.addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles(e.clipboardData.files);});
+/* コピーは色を付けずに渡す: ブラウザは選択範囲の HTML に画面の色（ダークモードなら白文字・暗い背景）を埋め込むので、
+   貼り付け先（メール・Word）で白文字になる。色なしの HTML（太字・箇条書き・表は残す）と素の文字だけを渡す */
+document.addEventListener('copy',e=>{
+  const t=e.target; if(t&&t.closest&&t.closest('input,textarea')) return;      // 入力欄は標準のまま
+  const sel=document.getSelection(); if(!sel||sel.isCollapsed||!sel.rangeCount) return;
+  const box=document.createElement('div'); box.appendChild(sel.getRangeAt(0).cloneContents());
+  box.querySelectorAll('svg,button,.bot-head,.relay .avatar').forEach(n=>n.remove());
+  box.querySelectorAll('*').forEach(n=>{ n.removeAttribute('style'); n.removeAttribute('class'); n.removeAttribute('id'); });
+  e.clipboardData.setData('text/plain',sel.toString());
+  e.clipboardData.setData('text/html',box.innerHTML);
+  e.preventDefault();
+});
 loadBots().then(()=>select(AUTO));
 fetch('/version').then(r=>r.json()).then(v=>{ const [h,d]=(v.version||'').split(' '); $('#ver').textContent=h?`${h}${d?' '+d.slice(5).replace('-','/'):''}`:''; $('#ver').title=`版: ${v.version}（改善を取り込むたびに 1 増える）\nフォルダ: ${v.folder}`; }).catch(()=>{});
 </script>
