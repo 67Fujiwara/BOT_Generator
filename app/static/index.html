@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>bot-team</title>
+<title>Bots</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
@@ -194,7 +194,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <body>
 
 <aside class="left">
-  <div class="left-top"><h1>bot-team <span id="ver" style="font:11px var(--mono);color:var(--muted);font-weight:400;margin-left:4px" title="版（コミット番号と日付）"></span></h1><button class="icon-btn" id="powerBtn" title="サーバーを終了する（次回は run.bat から）">⏻</button><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
+  <div class="left-top"><h1>Bots <span id="ver" style="font:11px var(--mono);color:var(--muted);font-weight:400;margin-left:4px" title="版（コミット番号と日付）"></span></h1><button class="icon-btn" id="powerBtn" title="サーバーを終了する（次回は run.bat から）">⏻</button><button class="icon-btn" id="settingsBtn" title="設定（API キー）">⚙</button><button class="icon-btn" id="newBot" title="ボットを追加する（.claude/agents にファイルを置く）">＋</button></div>
   <div class="left-top" style="padding-top:0"><input id="filter" placeholder="ボットを探す"></div>
   <div class="groups" id="groups"></div>
 </aside>
@@ -846,7 +846,7 @@ $('#settingsBtn').onclick=()=>openSettings();
 $('#powerBtn').onclick=async()=>{
   if(!confirm('サーバーを終了します。次に使うときは run.bat をダブルクリックしてください。')) return;
   try{ await fetch('/shutdown',{method:'POST'}); }catch(e){}
-  document.body.innerHTML='<div class="empty" style="margin:auto;grid-column:1/-1">bot-team を終了しました。<br>次に使うときは run.bat をダブルクリックしてください（窓は出ません）。</div>';
+  document.body.innerHTML='<div class="empty" style="margin:auto;grid-column:1/-1">Bots を終了しました。<br>次に使うときは run.bat をダブルクリックしてください（窓は出ません）。</div>';
 };
 $('#setClose').onclick=()=>{ dlg.close(); try{localStorage.setItem('settingsSeen','1');}catch(e){} };
 $('#setSave').onclick=async()=>{
