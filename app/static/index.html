@@ -330,8 +330,11 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 <script>
 const $=s=>document.querySelector(s);
 const log=$('#log'), input=$('#input'), sendBtn=$('#send'), attachedEl=$('#attached'), statusEl=$('#status'), toollog=$('#toollog');
-const AUTO={id:'_auto',nick:'ウッディ',desc:'おまかせ役。内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#D98E5B',shape:'woody',say:'返事きたよ、見てみて',preview:''};
+const AUTO={id:'_auto',nick:'ウッディ',label:'Woody',desc:'おまかせ役。内容を見て適したボットに振り分けます。',group:'',model:'既定',tools:['Agent'],color:'#D98E5B',shape:'woody',say:'返事きたよ、見てみて',preview:''};
 let bots=[], current=AUTO, pending=[], busy=new Set(), resetNext=false;
+/* 画面に出す名前は英語（フロントマター label:）。呼び名（カタカナ）はチャットで呼ぶとき・連絡タグ用に残す */
+const dn=b=>(b&&(b.label||b.nick))||'';
+const byNick=n=>n==='ウッディ'?AUTO:(bots.find(x=>x.nick===n||x.label===n)||null);
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const md=s=>window.marked?marked.parse(s,{breaks:true}):esc(s).replace(/\n/g,'<br>');
 /* id からブロブの形を決める。点の数 3〜7（3 は丸い三角、4 は丸い四角…）を Catmull-Rom で滑らかに閉じる */
@@ -366,19 +369,19 @@ const SHAPES={
   andy:  {d:'M34 30C30 14 42 6 50 12C58 4 72 10 68 26C74 24 80 28 76 34C84 42 84 58 78 70C72 84 60 92 50 92C40 92 28 84 22 70C16 58 16 42 24 34C20 28 26 24 34 30Z', ex:50, ey:52, dx:11, er:7.5},
   rex:   {d:'M6 42C20 28 44 20 64 22C84 24 94 38 92 56C90 70 82 80 68 82C60 84 54 82 50 78C46 88 34 94 20 92C10 90 4 84 6 76C10 72 24 70 44 70C40 64 30 58 20 54C14 52 8 50 6 48C4 46 4 44 6 42Z', ex:68, ey:40, dx:8, er:6.5},
 };
-const botHead=b=>`<div class="bot-head">${avatar(b,'avatar')}<span>${esc(b.nick)}</span></div>`;
+const botHead=b=>`<div class="bot-head">${avatar(b,'avatar')}<span>${esc(dn(b))}</span></div>`;
 const botMsg=(b,html)=>botHead(b)+html;
 const botOf=id=>id==='_auto'?AUTO:(bots.find(x=>x.id===id)||null);
 /* ボット間の連絡の 1 行（送り手 → 相手「内容」） */
 function relayLine(fromId,fromNick,toId,toNick,kind,text){
   const f=botOf(fromId), t=botOf(toId);
-  return `<div class="relay">${f?avatar(f):''}<b>${esc(fromNick)}</b><span class="arrow">${kind==='聞く'?'→ 聞く →':'→ 頼む →'}</span>${t?avatar(t):''}<b>${esc(toNick)}</b><q>${esc(text)}</q></div>`;
+  return `<div class="relay">${f?avatar(f):''}<b>${esc(f?dn(f):fromNick)}</b><span class="arrow">${kind==='聞く'?'→ 聞く →':'→ 頼む →'}</span>${t?avatar(t):''}<b>${esc(t?dn(t):toNick)}</b><q>${esc(text)}</q></div>`;
 }
 /* 履歴 1 件を描く。me: 本人（from があれば仲間からの連絡）/ bot: 返事（bot があれば仲間の返事）/ relay: 連絡の 1 行 */
 function renderHist(b,m){
   if(m.role==='relay') return append('relay-wrap',relayLine(b.id,m.from,m.to_id,m.to,m.kind,m.text));
   if(m.role==='me'){
-    if(m.from){ const f=bots.find(x=>x.nick===m.from)||(m.from==='ウッディ'?AUTO:null); return append('msg me from-bot',(f?`<div class="bot-head">${avatar(f)}<span>${esc(m.from)}からの連絡</span></div>`:'')+esc(m.text)); }
+    if(m.from){ const f=byNick(m.from); return append('msg me from-bot',(f?`<div class="bot-head">${avatar(f)}<span>${esc(dn(f))}からの連絡</span></div>`:'')+esc(m.text)); }
     return append('msg me',esc(m.text)+fileChips(m.files));
   }
   const who=(m.bot&&botOf(m.bot))||b;
@@ -388,13 +391,13 @@ function renderHist(b,m){
    （絵文字はボットが勝手に付けるので捨てる）。行頭以外の名前や、名前の後に文が続く行（「ポテトに頼んだよ」）はそのまま */
 function botChips(text){
   const all=[AUTO,...bots]; if(!all.length||!text) return text;
-  const names=all.map(b=>b.nick).filter(Boolean).sort((a,b)=>b.length-a.length).map(n=>n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  const names=all.flatMap(b=>[b.nick,b.label]).filter(Boolean).sort((a,b)=>b.length-a.length).map(n=>n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
   const re=new RegExp('^([ \\t]*(?:#{1,6}[ \\t]+|[-*][ \\t]+|\\d+\\.[ \\t]+)?)(\\*\\*|__)?(?:[\\p{Extended_Pictographic}\\uFE0F\\u200D\\u20E3]+[ \\t]*)?('+names+')(?:さん)?((?:[ \\t]*[:：])?(?:\\*\\*|__)?(?:[ \\t]*[:：])?)[ \\t]*','gmu');
   return text.replace(re,(m,pre,b1,nick,sep,off,str)=>{
-    const b=all.find(x=>x.nick===nick); if(!b) return m;
+    const b=all.find(x=>x.nick===nick||x.label===nick); if(!b) return m;
     const colon=/[:：]/.test(sep||'');
     if(!colon){ const eol=str.slice(off+m.length).match(/^[^\n]*/)[0]; if(eol.trim()) return m; }
-    const chip=`<span class="bot-chip">${avatar(b,'avatar').replace(/\n\s*/g,'')}${esc(nick)}</span>`;
+    const chip=`<span class="bot-chip">${avatar(b,'avatar').replace(/\n\s*/g,'')}${esc(dn(b))}</span>`;
     return pre+chip+(colon?'： ':'');
   });
 }
@@ -405,7 +408,7 @@ const avatar=(b,cls='avatar',id='',live=false)=>{
   const ey=sh?sh.ey:43+(seed%3)*3, dx=sh?sh.dx:10+(seed>>3)%3, ex=sh?sh.ex:50, er=sh?sh.er:8, c=b.color, k=er/8;
   const eye=x=>`<circle cx="${x}" cy="${ey}" r="${er}" fill="#fff" stroke="rgba(0,0,0,.10)" stroke-width="${(1*k).toFixed(2)}"/>`;
   const pupil=x=>`<circle cx="${x}" cy="${(ey+.6*k).toFixed(2)}" r="${(4.2*k).toFixed(2)}" fill="#1A2230"/><circle cx="${(x-1.4*k).toFixed(2)}" cy="${(ey-1*k).toFixed(2)}" r="${(1.3*k).toFixed(2)}" fill="#fff" opacity=".9"/>`;
-  return `<svg class="${cls}${live?' live':''}"${id?` id="${id}"`:''} viewBox="0 0 100 100" role="img" aria-label="${esc(b.nick)}">
+  return `<svg class="${cls}${live?' live':''}"${id?` id="${id}"`:''} viewBox="0 0 100 100" role="img" aria-label="${esc(dn(b))}">
     <defs><radialGradient id="${g}" cx="36%" cy="30%" r="78%"><stop offset="0" stop-color="${mix(c,[255,255,255],.55)}"/><stop offset=".4" stop-color="${mix(c,[255,255,255],.15)}"/><stop offset=".78" stop-color="${c}"/><stop offset="1" stop-color="${mix(c,[0,0,0],.32)}"/></radialGradient></defs>
     <path class="body${sh?' fixed':''}" fill="url(#${g})" d="${d0}">${anim}</path>
     <g class="eyes">${eye(ex-dx)}${eye(ex+dx)}${sh&&sh.eyes3?eye(ex).replace(`cy="${ey}"`,`cy="${ey-9}"`):''}<g class="pupils">${pupil(ex-dx)}${pupil(ex+dx)}${sh&&sh.eyes3?pupil(ex).replace(`cy="${(ey+.6*k).toFixed(2)}"`,`cy="${(ey-9+.6*k).toFixed(2)}"`).replace(`cy="${(ey-1*k).toFixed(2)}"`,`cy="${(ey-9-1*k).toFixed(2)}"`):''}</g></g></svg>`;
@@ -435,12 +438,12 @@ async function loadBots(){
 function renderList(){
   const q=$('#filter').value.trim();
   const wrap=$('#groups'); wrap.innerHTML='';
-  const groups={}; [...bots].filter(b=>!q||b.nick.includes(q)||b.desc.includes(q)).forEach(b=>(groups[b.group]??=[]).push(b));
+  const groups={}; [...bots].filter(b=>!q||b.nick.includes(q)||(b.label||'').toLowerCase().includes(q.toLowerCase())||b.desc.includes(q)).forEach(b=>(groups[b.group]??=[]).push(b));
   const mk=b=>{
     const el=document.createElement('button'); el.className='item'+(busy.has(b.id)?' busy':''); el.type='button';
     el.setAttribute('aria-current', String(current.id===b.id));
     const live=b.status; 
-    el.innerHTML=`${avatar(b,'avatar','',current.id===b.id)}<span class="t"><div class="n">${esc(b.nick)}</div><div class="p ${live?'live':''}">${esc(live||b.preview||b.desc)}</div></span><span class="dot"></span>`;
+    el.innerHTML=`${avatar(b,'avatar','',current.id===b.id)}<span class="t"><div class="n">${esc(dn(b))}</div><div class="p ${live?'live':''}">${esc(live||b.preview||b.desc)}</div></span><span class="dot"></span>`;
     el.onclick=()=>select(b); return el;
   };
   wrap.appendChild(mk(AUTO));
@@ -451,7 +454,7 @@ function renderList(){
 }
 async function select(b){
   current=b; renderList(); renderRight();
-  $('#topAvatar').outerHTML=avatar(b,'avatar','topAvatar',true); $('#topName').textContent=b.nick;
+  $('#topAvatar').outerHTML=avatar(b,'avatar','topAvatar',true); $('#topName').textContent=dn(b);
   log.innerHTML=''; statusEl.innerHTML='';
   const hist=b.id==='_auto'?[]:await (await fetch('/history/'+b.id)).json();
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
@@ -530,7 +533,7 @@ function remindLine(t){
 async function botNotify(b,title,body,tag,onclick){
   if(!('Notification' in window)||Notification.permission!=='granted') return;
   const icon=await avatarPng(b);
-  const n=new Notification(`${b.nick}: ${title}`,{body,icon:icon||undefined,tag,renotify:true});
+  const n=new Notification(`${dn(b)}: ${title}`,{body,icon:icon||undefined,tag,renotify:true});
   n.onclick=()=>{ window.focus(); onclick&&onclick(); n.close(); };
 }
 const jessieNotify=(title,body,tag)=>botNotify(jessieBot(),title,body,tag,()=>document.querySelector('.tabs button[data-pane="tasks"]').click());
@@ -538,7 +541,7 @@ function toast(t){
   const box=$('#toasts'); if([...box.children].some(x=>x.dataset.id==String(t.id))) return;
   const b=jessieBot(), line=remindLine(t);
   const el=document.createElement('div'); el.className='toast reply'; el.dataset.id=t.id; el.style.setProperty('--c',b.color);
-  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip">${esc(dueText(t))}</div><div class="tb"><button class="p">完了</button><button>明日に延ばす</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(dn(b))}</div><div class="say">${esc(line)}</div><div class="snip">${esc(dueText(t))}</div><div class="tb"><button class="p">完了</button><button>明日に延ばす</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
   const [bd,bt,bs,bc]=el.querySelectorAll('button');
   bd.onclick=async e=>{ e.stopPropagation(); await fetch(`/tasks/${t.id}/done`,{method:'POST'}); el.remove(); loadTasks(); };
   bt.onclick=async e=>{ e.stopPropagation(); if(await setDue(t,'明日')) el.remove(); };
@@ -553,7 +556,7 @@ function toastMany(list){
   const over=list.filter(t=>t.status==='期限切れ').length, today=list.filter(t=>t.status==='今日まで').length;
   const line = over ? `期限すぎてるのが ${over} 件あるよ！` : today ? `今日までのが ${today} 件あるよ、大丈夫？` : `気になるのが ${list.length} 件あるよ、ちょっと見て！`;
   const el=document.createElement('div'); el.className='toast reply'; el.dataset.id='many'; el.style.setProperty('--c',b.color);
-  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip" style="white-space:normal">${list.map(t=>`・${esc(t.title)}（${esc(t.status)}）`).join('<br>')}</div><div class="tb"><button class="p">タスクを見る</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(dn(b))}</div><div class="say">${esc(line)}</div><div class="snip" style="white-space:normal">${list.map(t=>`・${esc(t.title)}（${esc(t.status)}）`).join('<br>')}</div><div class="tb"><button class="p">タスクを見る</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
   const [bv,bs,bc]=el.querySelectorAll('button');
   bv.onclick=e=>{ e.stopPropagation(); document.querySelector('.tabs button[data-pane="tasks"]').click(); el.remove(); };
   bs.onclick=async e=>{ e.stopPropagation(); for(const t of list) await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
@@ -640,7 +643,7 @@ function checkAndy(){
   const b=andyBot(), line=ANDY_LINES[Math.floor(Math.random()*ANDY_LINES.length)];
   const box=$('#toasts'); if(box.querySelector('.toast[data-id="andy"]')) return;
   const el=document.createElement('div'); el.className='toast reply'; el.dataset.id='andy'; el.style.setProperty('--c',b.color);
-  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip">貯めておくと、あとで MC のタネになるよ</div><div class="tb"><button class="p">書く</button><button>あとで（1時間）</button><button>今日はもういい</button></div></div>`;
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(dn(b))}</div><div class="say">${esc(line)}</div><div class="snip">貯めておくと、あとで MC のタネになるよ</div><div class="tb"><button class="p">書く</button><button>あとで（1時間）</button><button>今日はもういい</button></div></div>`;
   const [bw,bl,bc]=el.querySelectorAll('button');
   const goWrite=async()=>{ el.remove(); const ab=bots.find(x=>x.kizuki); if(ab){ if(current.id!==ab.id) await select(ab); input.placeholder='気づきをそのまま書いてね（例: 端子台の型式をいつも探してる）'; input.focus(); } };
   bw.onclick=e=>{ e.stopPropagation(); goWrite(); };
@@ -670,12 +673,12 @@ async function notifyReply(b,text,sec){
   const snip=(text||'').replace(/[#*`>\-]/g,'').replace(/\s+/g,' ').trim().slice(0,70);
   // 画面内ポップアップ（クリックでそのボットへ）
   const box=$('#toasts'); const el=document.createElement('div'); el.className='toast reply'; el.style.setProperty('--c',b.color);
-  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(say)}</div><div class="snip">${esc(snip)}</div></div>`;
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(dn(b))}</div><div class="say">${esc(say)}</div><div class="snip">${esc(snip)}</div></div>`;
   el.onclick=()=>{ select(b); el.remove(); }; box.appendChild(el); setTimeout(()=>el.remove(),12000);
   // ブラウザ通知（許可済みのとき）
   if('Notification' in window&&Notification.permission==='granted'){
     const icon=await avatarPng(b);
-    const n=new Notification(`${b.nick}: ${say}`,{body:snip,icon:icon||undefined,tag:'reply-'+b.id,renotify:true});
+    const n=new Notification(`${dn(b)}: ${say}`,{body:snip,icon:icon||undefined,tag:'reply-'+b.id,renotify:true});
     n.onclick=()=>{ window.focus(); select(b); n.close(); };
   }
 }
@@ -753,7 +756,7 @@ $('#rec').onclick=toggleRec;
 window.addEventListener('beforeunload',e=>{ if(live){ e.preventDefault(); e.returnValue=''; } });
 function renderRight(){
   const b=current;
-  $('#rAvatar').outerHTML=avatar(b,'avatar','rAvatar',true); $('#rName').textContent=b.nick;   // 右パネルの大きいアイコンも選択中なので動かす（息・まばたき・目線）
+  $('#rAvatar').outerHTML=avatar(b,'avatar','rAvatar',true); $('#rName').textContent=dn(b);   // 右パネルの大きいアイコンも選択中なので動かす（息・まばたき・目線）
   $('#pane-detail').innerHTML=`<dl>
     <dt>役割</dt><dd>${esc(b.desc)}</dd>
     <dt>グループ</dt><dd>${esc(b.group||'—')}</dd>
@@ -770,7 +773,7 @@ async function renderMemory(b){
   let d={mine:[],all:[]}; try{ d=await (await fetch('/memory/'+encodeURIComponent(b.id))).json(); }catch(e){ return; }
   if(current.id!==b.id) return;
   const item=(it,scope)=>`<li><span>${esc(it.text)}${scope?` <em style="color:var(--muted);font-style:normal">（${scope}）</em>`:''}</span><button type="button" title="忘れる" data-key="${esc(it.text)}" data-scope="${scope?'_all':''}">×</button></li>`;
-  box.innerHTML=`<h3>${esc(b.nick)}が覚えていること <span style="font-weight:400">（チャットで「次から〜して」と言うと増えます。「全員」は全ボット共通）</span></h3>`+
+  box.innerHTML=`<h3>${esc(dn(b))}が覚えていること <span style="font-weight:400">（チャットで「次から〜して」と言うと増えます。「全員」は全ボット共通）</span></h3>`+
     `<div class="slot"><ul>${d.all.map(it=>item(it,'全員')).join('')}${d.mine.map(it=>item(it,'')).join('')}</ul>${(d.all.length+d.mine.length)?'':'<div class="none">まだありません</div>'}
      <form class="task-add" style="margin-top:8px"><div class="row2"><input placeholder="手で足す（例: 返事は3行以内）" autocomplete="off"><button type="submit">追加</button></div></form></div>`;
   box.querySelectorAll('li button').forEach(x=>x.onclick=async()=>{
@@ -850,8 +853,8 @@ async function send(){
         const line=buf.slice(0,i).replace(/^data: /,''); buf=buf.slice(i+2); if(!line) continue;
         const ev=JSON.parse(line);
         if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; const who=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot))||b; if(current.id===b.id) append('msg bot-msg',botMsg(who,md(botChips(ev.text)))); }
-        else if(ev.type==='tool'){ const w=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot)); setStatus(b,(w?w.nick+'が':'')+spoken(ev.text)); toollog.textContent+=ev.text+'\n'; }
-        else if(ev.type==='relay'){ if(current.id===b.id) append('relay-wrap',relayLine(ev.from,ev.from_nick,ev.to,ev.to_nick,ev.kind,ev.text)); setStatus(b,`${ev.to_nick}に${ev.kind==='聞く'?'聞いてる':'頼んでる'}…`); toollog.textContent+=`→ ${ev.to_nick}: ${ev.text}\n`; }
+        else if(ev.type==='tool'){ const w=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot)); setStatus(b,(w?dn(w)+'が':'')+spoken(ev.text)); toollog.textContent+=ev.text+'\n'; }
+        else if(ev.type==='relay'){ if(current.id===b.id) append('relay-wrap',relayLine(ev.from,ev.from_nick,ev.to,ev.to_nick,ev.kind,ev.text)); setStatus(b,`${dn(botOf(ev.to))||ev.to_nick}に${ev.kind==='聞く'?'聞いてる':'頼んでる'}…`); toollog.textContent+=`→ ${ev.to_nick}: ${ev.text}\n`; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`);
           const away=document.hidden||!document.hasFocus()||current.id!==b.id;
           if(replyText&&(away||(notifySec>=0&&ev.sec>=notifySec))) notifyReply(b,replyText,ev.sec); }

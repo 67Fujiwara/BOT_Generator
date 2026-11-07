@@ -102,6 +102,6 @@ API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` �
 `run.bat` をダブルクリックすると窓を出さずに裏で起動し、ブラウザでチャット画面 (http://127.0.0.1:8765) が開く。起動済みならブラウザを開くだけ。終了は画面左上の ⏻。`autostart_on.bat` でログオン時に自動起動（解除は `autostart_off.bat`）。登録時に bat/ps1 の「ダウンロード由来」の印を外し、PowerShell 経由の非表示で `update.bat` を起動するので、朝の起動に確認ダイアログも窓も出ない。
 チャットの文字をコピーすると、画面の色（ダークモードの白文字など）を付けずに渡す（貼り付け先の標準の色になる。太字・箇条書き・表は残る）。
 ドロップされたファイルは `inbox/日時/` に保存され、パスが本文に添えられる。
-ボットを足すときは `.claude/agents/<name>.md` を置くだけで画面のボタンにも自動で出る。フロントマターの `color:` で色、選択中のボットのアイコン（左の一覧・上のバー・右パネルの大きいもの）は動く（息・まばたき・瞳がマウスを追う）。`shape:` で固定シルエット（woody / potato / ham / rex / buzz / slinky / jessie / alien / prospector / andy。`index.html` の SHAPES に追加できる）。
+ボットを足すときは `.claude/agents/<name>.md` を置くだけで画面のボタンにも自動で出る。画面に出す名前はフロントマターの `label:`（英語。Woody / Potato / Ham / Rex / Buzz / Slinky / Jessie / Alien / Prospector / Andy。カタカナはインパクトが強いので英語にした）。呼び名（description の先頭のカタカナ）はチャットで呼ぶとき・連絡タグ・ウッディの「名前：」行でそのまま使え、英語名でも通る。フロントマターの `color:` で色、選択中のボットのアイコン（左の一覧・上のバー・右パネルの大きいもの）は動く（息・まばたき・瞳がマウスを追う）。`shape:` で固定シルエット（woody / potato / ham / rex / buzz / slinky / jessie / alien / prospector / andy。`index.html` の SHAPES に追加できる）。
 画面でボットを指定した送信は、そのボットの定義を直接システムプロンプトにして1回で返す（親の委譲を挟まない）。「ウッディ」（おまかせ役）だけ親が CLAUDE.md を見て委譲する。
 `inbox/` は作業用なので git には入れない。

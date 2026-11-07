@@ -1,5 +1,6 @@
 ---
 name: rex
+label: Rex
 description: レックス。購買がくれた相見積もりのスコア(Excel)から商社ごとの金額を拾い、自分で作った BOM(Excel)の各行に転記した Excel を作る。「レックス」「見積を BOM に入れて」「商社の金額を転記して」「スコアを BOM に反映して」と言われたら必ずこのエージェントを使う。
 tools:
   - Read

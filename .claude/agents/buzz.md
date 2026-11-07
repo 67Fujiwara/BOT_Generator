@@ -1,5 +1,6 @@
 ---
 name: buzz
+label: Buzz
 description: バズ。検証役。全ボットのスクリプトを tests/ のケースで一斉に回し、壊れていないかを PASS / FAIL で報告する。「バズ」「テストして」「検証して」「壊れてないか見て」と言われたら必ずこのエージェントを使う。
 tools:
   - Bash

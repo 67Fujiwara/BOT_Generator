@@ -154,7 +154,7 @@ def _front(path: Path) -> dict:
     txt = path.read_text(encoding="utf-8")
     head = txt.split("---")[1] if txt.startswith("---") else ""
     out = {}
-    for key in ("name", "description", "model", "group", "color", "shape", "record", "tasks", "kizuki", "say"):
+    for key in ("name", "label", "description", "model", "group", "color", "shape", "record", "tasks", "kizuki", "say"):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
@@ -204,7 +204,7 @@ def list_bots() -> list[dict]:
         nick = d.split("。")[0] if "。" in d else bid
         last = (_history.get(bid) or [{}])[-1]
         bots.append({
-            "id": bid, "nick": nick, "file": p.name,
+            "id": bid, "nick": nick, "label": f.get("label", ""), "file": p.name,   # label: 画面に出す英語名（呼び名はカタカナのまま）
             "desc": d.split("。", 1)[1].strip() if "。" in d else d,
             "group": f.get("group", "未分類"), "model": f.get("model", "既定"),
             "tools": f["tools"], "samples": f["samples"],
@@ -607,10 +607,10 @@ def _nick_of(bot_id: str) -> str:
 def _find_bot(name: str) -> tuple[str | None, str]:
     """「ジェシー」「jessie」「ウッディ」→ (id, 呼び名)。見つからなければ (None, 名前)。"""
     name = name.strip().strip("「」\"' ")
-    if name in ("ウッディ", "_auto", "woody"):
+    if name.lower() in ("ウッディ", "_auto", "woody"):
         return "_auto", "ウッディ"
     for b in list_bots():
-        if name in (b["nick"], b["id"]):
+        if name in (b["nick"], b["id"]) or (b.get("label") and name.lower() == b["label"].lower()):
             return b["id"], b["nick"]
     return None, name
 
