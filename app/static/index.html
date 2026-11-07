@@ -126,6 +126,7 @@ aside.right{background:var(--side);border-left:1px solid var(--line);overflow-y:
 .tasklist input[type=checkbox]{width:16px;height:16px;margin-top:3px;cursor:pointer}
 .tasklist .tt{font-size:13.5px;line-height:1.5;word-break:break-word} .tasklist li.done .tt{color:var(--muted);text-decoration:line-through}
 .tasklist .due{font-size:12px;color:var(--muted);margin-top:2px;cursor:pointer;border-bottom:1px dotted transparent} .tasklist .due:hover{color:var(--fg);border-bottom-color:var(--muted)}
+.kizukilist li{grid-template-columns:1fr auto auto} .kizukilist .mcbtn{font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--fg);cursor:pointer;white-space:nowrap} .kizukilist .mcbtn:hover{border-color:var(--accent);color:var(--accent)} .kizukilist li.mc .tt{color:var(--muted)} .kizukilist li.skip .tt{color:var(--muted);text-decoration:line-through}
 .duepick{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px} .duepick button{font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:var(--bg,transparent);color:var(--fg);cursor:pointer} .duepick button:hover{border-color:var(--muted)} .duepick input{font-size:12px;padding:3px 6px;width:9em;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg)} .duepick .hint{font-size:11px;color:var(--muted);width:100%}
 .tasklist .st{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--bubble);color:var(--muted);white-space:nowrap}
 .tasklist .st.期限切れ,.tasklist .st.すぐ{background:var(--err);color:#fff} .tasklist .st.今日まで{background:var(--caution);color:#1A2230} .tasklist .st.期間内{background:var(--accent);color:#fff}
@@ -225,6 +226,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <button role="tab" aria-selected="false" data-pane="files">ファイル</button>
     <button role="tab" aria-selected="false" data-pane="tasks">タスク<span class="badge" id="taskBadge"></span></button>
     <button role="tab" aria-selected="false" data-pane="memory">メモリ</button>
+    <button role="tab" aria-selected="false" data-pane="kizuki">気づき<span class="badge" id="kizukiBadge" style="background:var(--muted)"></span></button>
   </div>
   <div class="pane" id="pane-detail"></div>
   <div class="pane" id="pane-log" hidden><pre class="toollog" id="toollog">（まだ何もしていません）</pre></div>
@@ -237,6 +239,12 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     </form>
     <ul class="tasklist" id="tasklist"></ul>
     <div class="task-foot"><span id="taskCount"></span><button type="button" id="taskCopy" title="未完了タスクを文字でコピー（メールやメモに貼る用）">コピー</button><button type="button" id="taskShowDone">完了も表示</button><button type="button" id="taskNotify">通知を許可</button></div>
+  </div>
+  <div class="pane" id="pane-kizuki" hidden>
+    <form class="task-add" id="kizukiAdd"><div class="row2"><input id="kizukiText" placeholder="気づき（例: 端子台の型式をいつも探してる）" autocomplete="off"><button type="submit">追加</button></div></form>
+    <ul class="tasklist kizukilist" id="kizukilist"></ul>
+    <div class="task-foot"><span id="kizukiCount"></span><button type="button" id="kizukiShowAll">MC化・見送りも表示</button><button type="button" id="kizukiCopy" title="未着手の気づきを文字でコピー">コピー</button></div>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0 0">「MCにする」を押すとアンディが現状→原因→改善案→効果の順に一緒に考えて、MC シートの草案まで作ります。定期的な「気づき、何かある？」の間隔は ⚙ で変えられます。</p>
   </div>
   <div class="toasts" id="toasts"></div>
   <div class="drop-pill" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>ファイルをここに置く<span style="font-weight:400;color:var(--muted)">（添付になります）</span></div>
@@ -260,6 +268,17 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <option value="60">1 分以上</option>
     <option value="-1">画面を見ていない時だけ</option>
   </select>
+  <label for="andyEvery">アンディの「気づき、何かある？」 <span style="font-weight:400">（この間隔で右下に聞きに来る。MC のタネを集める用）</span></label>
+  <select id="andyEvery" class="set-field">
+    <option value="0">聞きに来ない</option>
+    <option value="30">30 分ごと</option>
+    <option value="60">1 時間ごと</option>
+    <option value="120">2 時間ごと</option>
+    <option value="180">3 時間ごと</option>
+    <option value="240">4 時間ごと</option>
+    <option value="480">1 日 1 回（8 時間ごと）</option>
+  </select>
+  <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:4px"><input type="checkbox" id="andyWork"> 平日の 8〜19 時だけ</label>
   <label for="sendKey">送信キー</label>
   <select id="sendKey" class="set-field">
     <option value="enter">Enter で送信（Shift+Enter で改行）</option>
@@ -344,6 +363,7 @@ const SHAPES={
   potato:{d:'M36 24C34 2 66 2 64 24C72 24 74 27 70 29C78 33 82 40 84 48C92 50 94 64 84 66C82 84 68 96 50 96C32 96 18 84 16 66C6 64 8 50 16 48C18 40 22 33 30 29C26 27 28 24 36 24Z', ex:50, ey:54, dx:10, er:7.5},
   ham:   {d:'M22 44C14 36 14 24 20 22C26 20 32 26 34 28C44 22 60 22 70 28C74 24 82 20 86 24C90 30 86 38 82 42C92 56 90 78 76 88C64 94 40 94 28 86C18 80 14 70 16 60C8 58 6 48 12 46C14 44 18 44 22 44Z', ex:52, ey:46, dx:11, er:7},
   prospector:{d:'M2 36C2 30 16 29 30 30C30 10 70 10 70 30C84 29 98 30 98 36C98 41 86 42 76 41C78 52 78 60 76 66C86 72 88 84 82 94C72 98 60 96 50 97C40 96 28 98 18 94C12 84 14 72 24 66C22 60 22 52 24 41C14 42 2 41 2 36Z', ex:50, ey:52, dx:10, er:7},
+  andy:  {d:'M34 30C30 14 42 6 50 12C58 4 72 10 68 26C74 24 80 28 76 34C84 42 84 58 78 70C72 84 60 92 50 92C40 92 28 84 22 70C16 58 16 42 24 34C20 28 26 24 34 30Z', ex:50, ey:52, dx:11, er:7.5},
   rex:   {d:'M6 42C20 28 44 20 64 22C84 24 94 38 92 56C90 70 82 80 68 82C60 84 54 82 50 78C46 88 34 94 20 92C10 90 4 84 6 76C10 72 24 70 44 70C40 64 30 58 20 54C14 52 8 50 6 48C4 46 4 44 6 42Z', ex:68, ey:40, dx:8, er:6.5},
 };
 const botHead=b=>`<div class="bot-head">${avatar(b,'avatar')}<span>${esc(b.nick)}</span></div>`;
@@ -438,7 +458,7 @@ async function select(b){
   hist.forEach(m=>renderHist(b,m));
   $('#rec').hidden=!b.record;
   /* ジェシー（タスク役）を選んだらタスクタブ、それ以外は詳細タブに戻す */
-  document.querySelector(`.tabs button[data-pane="${b.tasks?'tasks':'detail'}"]`).click();
+  document.querySelector(`.tabs button[data-pane="${b.kizuki?'kizuki':b.tasks?'tasks':'detail'}"]`).click();
   input.focus();
 }
 /* ── タスク（ジェシー）: 右パネルの常設タブ。チャットが流れても残る。1 分ごとに見直して催促する ── */
@@ -507,12 +527,13 @@ function remindLine(t){
   const n=t.title.length>22?t.title.slice(0,22)+'…':t.title;
   return {'期限切れ':`「${n}」期限すぎてるよ！`,'今日まで':`「${n}」今日までだよ、忘れてない？`,'すぐ':`「${n}」すぐやるやつ、まだ？`,'期間内':`「${n}」そろそろ手つけよ〜（${t.due_label}）`}[t.status]||`「${n}」どうなった？`;
 }
-async function jessieNotify(title,body,tag){
+async function botNotify(b,title,body,tag,onclick){
   if(!('Notification' in window)||Notification.permission!=='granted') return;
-  const b=jessieBot(); const icon=await avatarPng(b);
+  const icon=await avatarPng(b);
   const n=new Notification(`${b.nick}: ${title}`,{body,icon:icon||undefined,tag,renotify:true});
-  n.onclick=()=>{ window.focus(); document.querySelector('.tabs button[data-pane="tasks"]').click(); n.close(); };
+  n.onclick=()=>{ window.focus(); onclick&&onclick(); n.close(); };
 }
+const jessieNotify=(title,body,tag)=>botNotify(jessieBot(),title,body,tag,()=>document.querySelector('.tabs button[data-pane="tasks"]').click());
 function toast(t){
   const box=$('#toasts'); if([...box.children].some(x=>x.dataset.id==String(t.id))) return;
   const b=jessieBot(), line=remindLine(t);
@@ -558,6 +579,78 @@ async function checkReminders(){
   for(const t of due){ await fetch(`/tasks/${t.id}/reminded`,{method:'POST'}); t.last_reminded=now.toISOString(); }
 }
 loadTasks(); setInterval(loadTasks,60000);
+
+/* ── 気づき（アンディ）: 右パネルの常設タブ。MC（メソッドチェンジ）のタネ ── */
+const andyBot=()=>bots.find(b=>b.kizuki)||bots.find(b=>b.id==='andy')||{id:'andy',nick:'アンディ',color:'#3FBFA8',shape:'andy',kizuki:true};
+let kizukiCache=[], kizukiAll=false;
+async function loadKizuki(){
+  let d; try{ d=await (await fetch('/kizuki'+(kizukiAll?'?all=1':''))).json(); }catch(e){ return; }
+  kizukiCache=d.items; const open=d.counts.open;
+  $('#kizukiBadge').textContent=open||'';
+  const ul=$('#kizukilist'); ul.innerHTML='';
+  if(!d.items.length){ ul.innerHTML='<li style="display:block;color:var(--muted);font-size:13px">気づきはまだありません。アンディに「〜で困ってる」「〜がめんどくさい」と言うか、上の欄から足せます。</li>'; }
+  const ST={open:'未着手',mc:'MC化',skip:'見送り'};
+  d.items.forEach(it=>{
+    const li=document.createElement('li'); li.className=it.status;
+    li.innerHTML=`<div><div class="tt">${esc(it.text)}</div><div class="due">${esc(it.created.slice(0,10).replace(/-/g,'/'))}${it.note?' ・ '+esc(it.note):''}${it.mc_file?' ・ '+esc(it.mc_file):''}</div></div>${it.status==='open'?'<button type="button" class="mcbtn" title="アンディと一緒に MC にする">MCにする</button>':`<span class="st">${ST[it.status]||it.status}</span>`}<button class="x" title="${it.status==='open'?'見送りにする':'削除'}">×</button>`;
+    const mb=li.querySelector('.mcbtn'); if(mb) mb.onclick=()=>startMC(it);
+    li.querySelector('.x').onclick=async()=>{
+      if(it.status==='open'){ await fetch(`/kizuki/${it.id}/skip`,{method:'POST'}); }
+      else if(confirm(`「${it.text}」を削除しますか？`)){ await fetch(`/kizuki/${it.id}/remove`,{method:'POST'}); }
+      loadKizuki();
+    };
+    ul.appendChild(li);
+  });
+  $('#kizukiCount').textContent=`未着手 ${open} 件・MC化 ${d.counts.mc} 件`;
+  $('#kizukiShowAll').textContent=kizukiAll?'未着手だけ表示':'MC化・見送りも表示';
+}
+$('#kizukiAdd').onsubmit=async e=>{
+  e.preventDefault(); const inp=$('#kizukiText'); if(!inp.value.trim()) return;
+  const fd=new FormData(); fd.append('text',inp.value.trim());
+  const r=await (await fetch('/kizuki',{method:'POST',body:fd})).json(); if(!r.ok){ alert(r.error); return; }
+  inp.value=''; andyTouch(); loadKizuki();
+};
+$('#kizukiShowAll').onclick=()=>{ kizukiAll=!kizukiAll; loadKizuki(); };
+$('#kizukiCopy').onclick=async()=>{
+  const text=kizukiCache.filter(x=>x.status==='open').map(x=>`・${x.text}（${x.created.slice(0,10)}）`).join('\n')||'気づきはありません';
+  try{ await navigator.clipboard.writeText(text); $('#kizukiCopy').textContent='コピーしました'; }catch(e){ prompt('ここから選んでコピーしてください',text); }
+  setTimeout(()=>{ $('#kizukiCopy').textContent='コピー'; },1500);
+};
+/* 「MCにする」: アンディの画面に移って、その気づきで MC を始める */
+async function startMC(it){
+  const b=bots.find(x=>x.kizuki); if(!b){ alert('アンディ（kizuki: true のボット）がいません'); return; }
+  if(current.id!==b.id) await select(b);
+  input.value=`これ MC したい: [${it.id}] ${it.text}`; send();
+}
+/* 定期的な「気づき、何かある？」: 間隔は ⚙（分、0 で止める）。平日 8〜19 時だけに絞れる。最後に聞いた/書いた時刻はブラウザに記憶 */
+let andyEvery=120, andyWork=true; try{ const v=localStorage.getItem('andyEvery'); if(v!==null) andyEvery=parseInt(v,10); andyWork=localStorage.getItem('andyWork')!=='0'; }catch(e){}
+$('#andyEvery').value=String(andyEvery); $('#andyWork').checked=andyWork;
+$('#andyEvery').onchange=e=>{ andyEvery=parseInt(e.target.value,10); try{ localStorage.setItem('andyEvery',String(andyEvery)); }catch(e2){} andyTouch(); };
+$('#andyWork').onchange=e=>{ andyWork=e.target.checked; try{ localStorage.setItem('andyWork',andyWork?'1':'0'); }catch(e2){} };
+function andyTouch(){ try{ localStorage.setItem('andyLast',String(Date.now())); }catch(e){} }
+const ANDY_LINES=['気づき、何かある？ 小さいことでいいよ','今日、めんどくさかったことない？','「なんでこうなってるんだろう」って思ったこと、ある？','探し物・待ち・やり直し、どれかあった？','ひとつでいいから、気づいたこと聞かせて'];
+function checkAndy(){
+  if(!(andyEvery>0)) return;
+  const now=new Date();
+  if(andyWork){ const d=now.getDay(), h=now.getHours(); if(d===0||d===6||h<8||h>=19) return; }
+  let last=0; try{ last=parseInt(localStorage.getItem('andyLast')||'0',10)||0; }catch(e){}
+  if(!last){ andyTouch(); return; }                 // 初回は今から数える（開いた瞬間に出さない）
+  if(now-last<andyEvery*60e3) return;
+  andyTouch();
+  const b=andyBot(), line=ANDY_LINES[Math.floor(Math.random()*ANDY_LINES.length)];
+  const box=$('#toasts'); if(box.querySelector('.toast[data-id="andy"]')) return;
+  const el=document.createElement('div'); el.className='toast reply'; el.dataset.id='andy'; el.style.setProperty('--c',b.color);
+  el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(b.nick)}</div><div class="say">${esc(line)}</div><div class="snip">貯めておくと、あとで MC のタネになるよ</div><div class="tb"><button class="p">書く</button><button>あとで（1時間）</button><button>今日はもういい</button></div></div>`;
+  const [bw,bl,bc]=el.querySelectorAll('button');
+  const goWrite=async()=>{ el.remove(); const ab=bots.find(x=>x.kizuki); if(ab){ if(current.id!==ab.id) await select(ab); input.placeholder='気づきをそのまま書いてね（例: 端子台の型式をいつも探してる）'; input.focus(); } };
+  bw.onclick=e=>{ e.stopPropagation(); goWrite(); };
+  bl.onclick=e=>{ e.stopPropagation(); try{ localStorage.setItem('andyLast',String(Date.now()-andyEvery*60e3+60*60e3)); }catch(e2){} el.remove(); };
+  bc.onclick=e=>{ e.stopPropagation(); try{ localStorage.setItem('andyLast',String(Date.now()+24*60*60e3)); }catch(e2){} el.remove(); };
+  el.onclick=goWrite;
+  box.appendChild(el);
+  botNotify(b,line,'貯めておくと、あとで MC のタネになるよ','andy',goWrite);
+}
+loadKizuki(); setInterval(checkAndy,60000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadTasks(); });
 
 /* ── 返事の通知: 3 秒以上かかった返事、または別タブ・別アプリを見ている間の返事は、ボットのアイコン付きでポップアップ＋ブラウザ通知 ── */
@@ -767,7 +860,7 @@ async function send(){
     }
   }catch(e){ append('error','サーバーに届きません。python app/server.py が動いているか確認してください。'); }
   busy.delete(b.id); setStatus(b,''); sendBtn.disabled=false; input.focus();
-  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles(); loadTasks(); if(current.id===b.id) renderMemory(b);
+  const fresh=await (await fetch('/bots')).json(); bots=fresh; renderList(); refreshFiles(); loadTasks(); loadKizuki(); if(b.kizuki) andyTouch(); if(current.id===b.id) renderMemory(b);
 }
 
 sendBtn.onclick=send;
@@ -870,7 +963,7 @@ $('#setTest').onclick=async()=>{
 loadSettings().then(st=>{ let seen=false; try{seen=!!localStorage.getItem('settingsSeen');}catch(e){} if(!st.api_key_set&&!st.env_key_set&&!seen) openSettings(); });
 document.querySelectorAll('.tabs button').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true');
-  ['detail','log','files','tasks','memory'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles(); if(t.dataset.pane==='tasks') loadTasks(); if(t.dataset.pane==='memory') renderMemory(current);
+  ['detail','log','files','tasks','memory','kizuki'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles(); if(t.dataset.pane==='tasks') loadTasks(); if(t.dataset.pane==='memory') renderMemory(current); if(t.dataset.pane==='kizuki') loadKizuki();
 });
 let dragDepth=0;
 document.addEventListener('dragenter',e=>{e.preventDefault();if(++dragDepth===1)document.body.classList.add('drag');});

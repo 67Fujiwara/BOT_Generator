@@ -256,5 +256,42 @@
       "\"relays\": []",
       "覚えておくね"
     ]
+  },
+  {
+    "name": "kizuki-登録と一覧",
+    "cmd": "python scripts/kizuki.py --store {fx}/kizuki.json add 端子台の型式をいつも探してる --note 週3回くらい",
+    "exit": 0,
+    "contains": [
+      "登録: [1]",
+      "未着手",
+      "端子台の型式をいつも探してる",
+      "メモ: 週3回くらい"
+    ]
+  },
+  {
+    "name": "kizuki-MC化の印",
+    "cmd": "python scripts/kizuki.py --store {fx}/kizuki.json mc 1 --file inbox/MC/test.md",
+    "exit": 0,
+    "contains": [
+      "更新: [1]",
+      "MC化",
+      "inbox/MC/test.md"
+    ]
+  },
+  {
+    "name": "kizuki-未着手なし",
+    "cmd": "python scripts/kizuki.py --store {fx}/kizuki.json list",
+    "exit": 0,
+    "contains": [
+      "未着手の気づきはありません"
+    ]
+  },
+  {
+    "name": "kizuki-ないidは3",
+    "cmd": "python scripts/kizuki.py --store {fx}/kizuki.json skip 99",
+    "exit": 3,
+    "contains": [
+      "ありません"
+    ]
   }
 ]

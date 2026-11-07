@@ -154,7 +154,7 @@ def _front(path: Path) -> dict:
     txt = path.read_text(encoding="utf-8")
     head = txt.split("---")[1] if txt.startswith("---") else ""
     out = {}
-    for key in ("name", "description", "model", "group", "color", "shape", "record", "tasks", "say"):
+    for key in ("name", "description", "model", "group", "color", "shape", "record", "tasks", "kizuki", "say"):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
@@ -211,6 +211,7 @@ def list_bots() -> list[dict]:
             "color": f.get("color", PALETTE[sum(bid.encode()) % len(PALETTE)]),   # 既定色は id から決める（ファイルが増えても変わらない）
             "shape": f.get("shape", ""), "record": f.get("record", "").lower() in ("true", "yes", "1"),
             "tasks": f.get("tasks", "").lower() in ("true", "yes", "1"), "say": f.get("say", ""),
+            "kizuki": f.get("kizuki", "").lower() in ("true", "yes", "1"),
             "preview": (last.get("text") or "")[:60].replace("\n", " "),
             "status": "",
         })
@@ -427,6 +428,52 @@ def task_action(task_id: int, action: str, text: str = Form("")):
     else:
         return {"ok": False, "error": "不明な操作"}
     tk._save(tasks)
+    return {"ok": True}
+
+
+def _kizuki_mod():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("kizuki", ROOT / "scripts" / "kizuki.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@app.get("/kizuki")
+def kizuki_list(all: bool = False):
+    kz = _kizuki_mod()
+    items = kz._load()
+    if not all:
+        items = [x for x in items if x.get("status") == "open"]
+    return {"items": list(reversed(items)), "counts": {k: sum(1 for x in kz._load() if x.get("status") == k) for k in ("open", "mc", "skip")}}
+
+
+@app.post("/kizuki")
+def kizuki_add(text: str = Form(...), note: str = Form("")):
+    kz = _kizuki_mod()
+    if not text.strip():
+        return {"ok": False, "error": "気づきが空です"}
+    return {"ok": True, "item": kz.add(text, note)}
+
+
+@app.post("/kizuki/{item_id}/{action}")
+def kizuki_action(item_id: int, action: str):
+    kz = _kizuki_mod()
+    items = kz._load()
+    it = next((x for x in items if x["id"] == item_id), None)
+    if not it:
+        return {"ok": False, "error": "その気づきはありません"}
+    if action == "remove":
+        items.remove(it)
+    elif action in ("mc", "skip", "undo"):
+        it["status"] = {"mc": "mc", "skip": "skip", "undo": "open"}[action]
+        if action == "mc":
+            it["mc_at"] = datetime.now().isoformat(timespec="minutes")
+        if action == "undo":
+            it["mc_at"], it["mc_file"] = None, ""
+    else:
+        return {"ok": False, "error": "不明な操作"}
+    kz._save(items)
     return {"ok": True}
 
 
@@ -746,6 +793,11 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
         remembered = _memory_mod().prompt_block(bot_id)
         if remembered:
             prompt = remembered + "\n\n" + prompt
+    if agent and agent.get("kizuki", "").lower() in ("true", "yes", "1"):   # アンディ: 未着手の気づき一覧を先頭に添える
+        kz = _kizuki_mod()
+        open_k = [x for x in kz._load() if x.get("status") == "open"]
+        head = "未着手の気づき:\n" + ("\n".join(kz.fmt(x) for x in open_k) if open_k else "（なし）")
+        prompt = head + "\n\n依頼:\n" + prompt
     if agent and agent.get("tasks", "").lower() in ("true", "yes", "1"):
         tk = _tasks_mod()
         open_tasks = [t for t in tk._load() if not t.get("done")]
