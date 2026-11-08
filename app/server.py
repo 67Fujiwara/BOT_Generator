@@ -788,7 +788,17 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
     elif not prompt:
         prompt = "お願いします"
     if saved:
-        prompt += "\n\nファイル:\n" + "\n".join(f"- {p.relative_to(ROOT)}" for p in saved)
+        img_ext = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+        lines = []
+        for p in saved:
+            rel = p.relative_to(ROOT)
+            line = f"- {rel}"
+            if p.suffix.lower() in img_ext:        # 画像は、そのまま返事に貼れる行を添える（全ボットが画像を見せられるように）
+                line += f"\n  表示: ![{p.name}](/files/{rel.as_posix()})"
+            elif p.suffix.lower() == ".pdf":
+                line += f"\n  ページを見せる: python scripts/show_image.py pages \"{rel}\" --pages 1"
+            lines.append(line)
+        prompt += "\n\nファイル:\n" + "\n".join(lines)
     if not agent:                                   # ウッディ（おまかせ）経路: 覚えている指示を本文の先頭に添える
         remembered = _memory_mod().prompt_block(bot_id)
         if remembered:

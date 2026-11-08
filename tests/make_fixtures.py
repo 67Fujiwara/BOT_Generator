@@ -1,4 +1,5 @@
 """検証用の入力ファイルを tests/fixtures/ に生成する（毎回同じ内容。git には入れない）。"""
+import shutil
 import sys
 from pathlib import Path
 
@@ -40,6 +41,7 @@ def main():
     OUT.mkdir(exist_ok=True)
     for stale in ("kizuki.json", "tasks.json"):      # 前回のケースが残した保存ファイルは消す（id が 1 から始まる前提）
         (OUT / stale).unlink(missing_ok=True)
+    shutil.rmtree(OUT / "drawing_画像", ignore_errors=True)
     # ポテト用: BOM(Excel) と 発注書(CSV、列名違い・小計行・全角型式)
     pd.DataFrame({"型式": ["KV-8000", "KV-N24AR", "MR-J4-10A", "ＦＸ５Ｕ－32MR"], "品名": ["PLC", "拡張", "サーボ", "PLC"],
                   "数量": [1, 2, 3, 1], "単価": [150000, 30000, 80000, 50000], "メーカ": ["KEYENCE", "KEYENCE", "三菱", "三菱"]}

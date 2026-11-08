@@ -293,5 +293,31 @@
     "contains": [
       "ありません"
     ]
+  },
+  {
+    "name": "show_image-PDFのページ",
+    "cmd": "python scripts/show_image.py --here pages {fx}/drawing.pdf --pages 1",
+    "exit": 0,
+    "contains": [
+      "![drawing.pdf p.1](/files/",
+      "page-01.png)"
+    ]
+  },
+  {
+    "name": "show_image-切り抜き",
+    "cmd": "python scripts/show_image.py --here crop {fx}/drawing.pdf --region 0.1,0.1,0.6,0.5 --page 2 --label 試し",
+    "exit": 0,
+    "contains": [
+      "![試し](/files/",
+      "crop-01.png)"
+    ]
+  },
+  {
+    "name": "show_image-範囲が逆は2",
+    "cmd": "python scripts/show_image.py --here crop {fx}/drawing.pdf --region 0.6,0.5,0.1,0.1",
+    "exit": 2,
+    "contains": [
+      "右下が左上より"
+    ]
   }
 ]

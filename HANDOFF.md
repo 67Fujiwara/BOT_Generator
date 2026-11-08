@@ -133,6 +133,10 @@ claude-agent-sdk は Claude Code からの 1 メッセージが 1MB を超える
 
 ダウンロード由来（Zone.Identifier）の bat を ShellExecute で開くと出る。対策: (1) Startup のショートカットは `start_hidden.ps1` → `Start-Process cmd.exe /c update.bat`（cmd.exe はシステムの exe なので印の有無に関係なくダイアログが出ない）。(2) `run.bat` / `update.bat` / `autostart_on.bat` / `setup.ps1` が自フォルダの *.bat/*.ps1/*.cmd を Unblock-File。setup.ps1 の最後の起動も cmd.exe 経由。Windows 実機では未検証。
 
+## 画像の表示（2026-11-08）
+
+全ボット共通。`scripts/show_image.py`（show / pages / crop、`--here` はテスト用でコピーしない）が `![…](/files/…)` の行を出し、ボットはそれを貼るだけ。サーバーはドロップされた画像に `表示:` 行、PDF に pages の例を添える（`/chat` のファイル一覧）。ルールは bot_rules.md「画像を見せる」。エイリアンの `check_drawing.py crop` はそのまま（検図専用、文字検索付き）。
+
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 
 | 経路 | 時間 | 備考 |
