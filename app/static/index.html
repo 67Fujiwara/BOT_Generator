@@ -460,7 +460,9 @@ async function select(b){
   if(!hist.length) log.innerHTML=`<div class="empty">${esc(b.desc)}<br>${sendKey==='ctrl'?'Ctrl+Enter で送信、Enter で改行':'Enter で送信、Shift+Enter で改行'}</div>`;
   hist.forEach(m=>renderHist(b,m));
   $('#rec').hidden=!b.record;
-  /* ジェシー（タスク役）を選んだらタスクタブ、それ以外は詳細タブに戻す */
+  /* タスク・気づきのタブは担当ボット（tasks: / kizuki: のあるボット）のときだけ出す。催促・ポップアップは誰を選んでいても動く */
+  document.querySelector('.tabs button[data-pane="tasks"]').hidden=!b.tasks;
+  document.querySelector('.tabs button[data-pane="kizuki"]').hidden=!b.kizuki;
   document.querySelector(`.tabs button[data-pane="${b.kizuki?'kizuki':b.tasks?'tasks':'detail'}"]`).click();
   input.focus();
 }
@@ -536,7 +538,9 @@ async function botNotify(b,title,body,tag,onclick){
   const n=new Notification(`${dn(b)}: ${title}`,{body,icon:icon||undefined,tag,renotify:true});
   n.onclick=()=>{ window.focus(); onclick&&onclick(); n.close(); };
 }
-const jessieNotify=(title,body,tag)=>botNotify(jessieBot(),title,body,tag,()=>document.querySelector('.tabs button[data-pane="tasks"]').click());
+/* タスクを見る: ジェシーの画面に移る（タスクタブはジェシーのときだけ出る） */
+async function showTasks(){ const j=jessieBot(); if(bots.includes(j)&&current.id!==j.id) await select(j); else document.querySelector('.tabs button[data-pane="tasks"]').click(); }
+const jessieNotify=(title,body,tag)=>botNotify(jessieBot(),title,body,tag,showTasks);
 function toast(t){
   const box=$('#toasts'); if([...box.children].some(x=>x.dataset.id==String(t.id))) return;
   const b=jessieBot(), line=remindLine(t);
@@ -558,7 +562,7 @@ function toastMany(list){
   const el=document.createElement('div'); el.className='toast reply'; el.dataset.id='many'; el.style.setProperty('--c',b.color);
   el.innerHTML=`${avatar(b,'avatar')}<div><div class="who">${esc(dn(b))}</div><div class="say">${esc(line)}</div><div class="snip" style="white-space:normal">${list.map(t=>`・${esc(t.title)}（${esc(t.status)}）`).join('<br>')}</div><div class="tb"><button class="p">タスクを見る</button><button>あとで（2時間）</button><button>閉じる</button></div></div>`;
   const [bv,bs,bc]=el.querySelectorAll('button');
-  bv.onclick=e=>{ e.stopPropagation(); document.querySelector('.tabs button[data-pane="tasks"]').click(); el.remove(); };
+  bv.onclick=e=>{ e.stopPropagation(); showTasks(); el.remove(); };
   bs.onclick=async e=>{ e.stopPropagation(); for(const t of list) await fetch(`/tasks/${t.id}/snooze`,{method:'POST'}); el.remove(); };
   bc.onclick=e=>{ e.stopPropagation(); el.remove(); };
   box.appendChild(el);
