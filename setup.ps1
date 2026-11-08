@@ -68,12 +68,12 @@ if (-not (Test-Path '.venv\Scripts\python.exe')) {
 if ($LASTEXITCODE -ne 0) { Write-Host 'pip install failed. Check the messages above.'; exit 1 }
 
 Write-Host '[3/4] Registering autostart at Windows logon (silent, no prompt)...'
-Get-ChildItem -Path $PSScriptRoot -Include *.bat,*.ps1 -Recurse | Unblock-File -ErrorAction SilentlyContinue
+Get-ChildItem -LiteralPath $PSScriptRoot -Include *.bat,*.ps1,*.cmd -Recurse | Unblock-File -ErrorAction SilentlyContinue
 $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\bot-team.lnk'
 $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
 $s.TargetPath = 'powershell.exe'
-$upd = Join-Path $PSScriptRoot 'update.bat'   # pull the latest version at logon, then start
-$s.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"Start-Process -WindowStyle Hidden -FilePath '$upd'`""
+$starter = Join-Path $PSScriptRoot 'start_hidden.ps1'   # runs cmd.exe /c update.bat hidden: pull latest, then start, no dialog
+$s.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$starter`""
 $s.WorkingDirectory = $PSScriptRoot
 $s.WindowStyle = 7
 $s.IconLocation = 'shell32.dll,43'
@@ -81,7 +81,7 @@ $s.Save()
 Write-Host "      $lnk"
 
 Write-Host '[4/4] Starting bot-team now...'
-Start-Process -FilePath (Join-Path $PSScriptRoot 'run.bat') -WindowStyle Hidden
+Start-Process -FilePath $env:ComSpec -ArgumentList '/c', ('"' + (Join-Path $PSScriptRoot 'run.bat') + '"') -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
 Write-Host ''
 Write-Host 'Done. The browser opens http://127.0.0.1:8765 in a moment.'
 Write-Host 'Save your API key with the gear button (top-left). To undo autostart, run autostart_off.bat.'

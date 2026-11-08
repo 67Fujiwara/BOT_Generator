@@ -2,6 +2,8 @@
 rem Update bot-team to the latest version and (re)start it. Used by the logon autostart too.
 rem Local edits to tracked files are discarded (settings, inbox, samples, tasks and keys are untouched).
 cd /d %~dp0
+rem Remove the "downloaded file" mark from the scripts so Windows stops asking "do you want to run this software?"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath '%~dp0' -Recurse -Include *.bat,*.ps1,*.cmd | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1
 if not exist .git (
   echo This folder is not a git clone, so it cannot be updated. Starting as is.
   call run.bat

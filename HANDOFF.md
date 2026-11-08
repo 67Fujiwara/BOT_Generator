@@ -129,6 +129,10 @@ bot-team/
 
 claude-agent-sdk は Claude Code からの 1 メッセージが 1MB を超えると `CLIJSONDecodeError: JSON message exceeded maximum buffer size` で落ちる（ページ画像の Read や長い Bash 出力で起きた）。`_build_opts()` で `max_buffer_size=MAX_MSG_BYTES`（64MB）にしている。
 
+## 起動時の「発行元を確認できませんでした」（2026-11-08）
+
+ダウンロード由来（Zone.Identifier）の bat を ShellExecute で開くと出る。対策: (1) Startup のショートカットは `start_hidden.ps1` → `Start-Process cmd.exe /c update.bat`（cmd.exe はシステムの exe なので印の有無に関係なくダイアログが出ない）。(2) `run.bat` / `update.bat` / `autostart_on.bat` / `setup.ps1` が自フォルダの *.bat/*.ps1/*.cmd を Unblock-File。setup.ps1 の最後の起動も cmd.exe 経由。Windows 実機では未検証。
+
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 
 | 経路 | 時間 | 備考 |
