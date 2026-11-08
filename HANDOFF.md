@@ -28,7 +28,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 | レックス | rex | 購買の相見積もりスコア(Excel)から商社ごとの金額を拾い、BOM(Excel)に転記した `<BOM名>_見積.xlsx` を作る。右端に商社ごとの単価・金額列。型式不一致は空欄＋要確認 | Read, Bash, Glob | 購買・リスト |
 | エイリアン | alien | 電気図面 PDF の検図。`check_drawing.py` で決定的チェック＋切り抜き画像、ページ画像を目視、指摘を画像付きで返す | Bash, Read, Glob | 設計 |
 | ジェシー | jessie | タスク管理。文から仕事と納期を拾って `tasks.py` で登録、納期なしは聞き返す。右パネル「タスク」タブにチェックボックスで常設、期限で催促ポップアップ | Bash | 管理 |
-| バズ | buzz | 検証役。`tests/run_tests.py` を1回の Bash で回して PASS/FAIL を報告。直さない | Bash, Read, Glob | 検証 |
+| バズ | buzz | 検証役。他ボットの成果物を自動チェック（`inspect_file.py`、判定タグ、NG は本人へフィードバック、繰り返しは「次から〜しないようにして」）＋ `tests/run_tests.py` を1回の Bash で回して PASS/FAIL。直さない | Bash, Read, Glob | 検証 |
 | アンディ | andy | 気づき（MC＝メソッドチェンジのタネ）を `kizuki.py` で貯め、「MC したい」で現状→原因→改善案→効果→MC シート草案まで 1 返事 1 テーマで一緒に考える。右パネル「気づき」タブ常設、⚙ で間隔を決めて「気づき、何かある？」のポップアップ | Bash, Read, Write | 改善 |
 | プロスペクター | prospector | ソフト・PLC 歴 30 年のレジェンド。各社 PLC / HMI / サーボ / ネットワーク / 安全 / ロボットを全業界の現場経験で答える。設計相談・ラダー/ST レビュー・トラブル切り分け・機種選定・規格。知識で答え、確証が要るときだけ Web を 1〜2 回。右パネル「資料」「プログラム」の社内標準を優先 | Read, Glob, Bash, WebSearch, WebFetch | 制御 |
 | スリンキー | slinky | 録音/文字起こし → `transcribe.py`（文字起こし＋フィラー除去）→ 議事録 md（決定事項/ToDo/論点）。日時・参加者が不明なら1回聞く | Bash, Read, Glob, Write | 文章 |
@@ -136,6 +136,10 @@ claude-agent-sdk は Claude Code からの 1 メッセージが 1MB を超える
 ## 画像の表示（2026-11-08）
 
 全ボット共通。`scripts/show_image.py`（show / pages / crop、`--here` はテスト用でコピーしない）が `![…](/files/…)` の行を出し、ボットはそれを貼るだけ。サーバーはドロップされた画像に `表示:` 行、PDF に pages の例を添える（`/chat` のファイル一覧）。ルールは bot_rules.md「画像を見せる」。エイリアンの `check_drawing.py crop` はそのまま（検図専用、文字検索付き）。
+
+## 成果物の自動チェック（2026-11-08）
+
+`_talk()` の depth 0 の終わりに `_changed_files(t_start)`（ROOT を mtime で走査、app/.git/.venv/fixtures/_画像/_検図/画像・音声・log を除外）→ `checks:` を持つボット（バズ: *.xlsx/*.csv/*.md/*.txt/scripts/*.py/tests/*、エイリアン: *.pdf）にグロブで振り分け → relay(kind=確認) → `_talk(checker, _check_prompt(...), depth=1, check_of=...)`。検証役の `[[判定: OK|NG: 種類]]` は `_take_verdict` が外して `app/checks.json` に記録。プロンプトにその作成者の過去 NG（最大 8）を入れ、同種なら「次から〜しないようにして」を書かせる → 作成者側は bot_rules の記憶ルールで `[[覚える]]`。NG の `[[頼む]]` は既存の relay 経路（depth 2）で作成者に届く。再チェックは自動では回さない（コストと往復の上限）。`scripts/inspect_file.py` が Excel/CSV/md/txt/PDF の要約を 1 回で出す。
 
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 

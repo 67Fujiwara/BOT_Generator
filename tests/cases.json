@@ -319,5 +319,25 @@
     "contains": [
       "右下が左上より"
     ]
+  },
+  {
+    "name": "inspect_file-ExcelとCSV",
+    "cmd": "python scripts/inspect_file.py {fx}/bom.xlsx {fx}/order.csv",
+    "exit": 0,
+    "contains": [
+      "== ",
+      "行 ×",
+      "列:",
+      "先頭:",
+      "穴埋め語"
+    ]
+  },
+  {
+    "name": "inspect_file-ないファイルは2",
+    "cmd": "python scripts/inspect_file.py {fx}/nothing.md",
+    "exit": 2,
+    "contains": [
+      "見つからない"
+    ]
   }
 ]

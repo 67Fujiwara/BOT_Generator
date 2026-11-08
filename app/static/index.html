@@ -375,7 +375,7 @@ const botOf=id=>id==='_auto'?AUTO:(bots.find(x=>x.id===id)||null);
 /* ボット間の連絡の 1 行（送り手 → 相手「内容」） */
 function relayLine(fromId,fromNick,toId,toNick,kind,text){
   const f=botOf(fromId), t=botOf(toId);
-  return `<div class="relay">${f?avatar(f):''}<b>${esc(f?dn(f):fromNick)}</b><span class="arrow">${kind==='聞く'?'→ 聞く →':'→ 頼む →'}</span>${t?avatar(t):''}<b>${esc(t?dn(t):toNick)}</b><q>${esc(text)}</q></div>`;
+  return `<div class="relay">${f?avatar(f):''}<b>${esc(f?dn(f):fromNick)}</b><span class="arrow">${kind==='聞く'?'→ 聞く →':kind==='確認'?'→ チェック依頼 →':'→ 頼む →'}</span>${t?avatar(t):''}<b>${esc(t?dn(t):toNick)}</b><q>${esc(text)}</q></div>`;
 }
 /* 履歴 1 件を描く。me: 本人（from があれば仲間からの連絡）/ bot: 返事（bot があれば仲間の返事）/ relay: 連絡の 1 行 */
 function renderHist(b,m){
@@ -829,6 +829,7 @@ function spoken(t){
   if(/^Write$/.test(t)) return '書いてる…';
   if(/送り直します/.test(t)) return '前の話が見つからないから、新しく送り直すね';
   if(/^(覚えた|全員で覚えた|忘れた): /.test(t)) return t;
+  if(/^判定: /.test(t)) return t;
   return t.length>40 ? '作業中…（'+t.slice(0,36)+'…）' : t+'…';
 }
 function setStatus(b,text){ const it=bots.find(x=>x.id===b.id); if(it) it.status=text; statusEl.innerHTML=text?`${avatar(b)}<span>${esc(text)}</span>`:''; renderList(); }
@@ -858,7 +859,7 @@ async function send(){
         const ev=JSON.parse(line);
         if(ev.type==='text'){ replyText+=(replyText?'\n':'')+ev.text; const who=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot))||b; if(current.id===b.id) append('msg bot-msg',botMsg(who,md(botChips(ev.text)))); }
         else if(ev.type==='tool'){ const w=(ev.bot&&ev.bot!==b.id&&botOf(ev.bot)); setStatus(b,(w?dn(w)+'が':'')+spoken(ev.text)); toollog.textContent+=ev.text+'\n'; }
-        else if(ev.type==='relay'){ if(current.id===b.id) append('relay-wrap',relayLine(ev.from,ev.from_nick,ev.to,ev.to_nick,ev.kind,ev.text)); setStatus(b,`${dn(botOf(ev.to))||ev.to_nick}に${ev.kind==='聞く'?'聞いてる':'頼んでる'}…`); toollog.textContent+=`→ ${ev.to_nick}: ${ev.text}\n`; }
+        else if(ev.type==='relay'){ if(current.id===b.id) append('relay-wrap',relayLine(ev.from,ev.from_nick,ev.to,ev.to_nick,ev.kind,ev.text)); setStatus(b,`${dn(botOf(ev.to))||ev.to_nick}${ev.kind==='確認'?'がチェック中':ev.kind==='聞く'?'に聞いてる':'に頼んでる'}…`); toollog.textContent+=`→ ${ev.to_nick}: ${ev.text}\n`; }
         else if(ev.type==='done'){ if(current.id===b.id) append('meta',`${ev.sec}s`);
           const away=document.hidden||!document.hasFocus()||current.id!==b.id;
           if(replyText&&(away||(notifySec>=0&&ev.sec>=notifySec))) notifyReply(b,replyText,ev.sec); }

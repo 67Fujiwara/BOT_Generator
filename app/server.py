@@ -158,9 +158,9 @@ def _front(path: Path) -> dict:
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
-    for key in ("tools", "samples"):
+    for key in ("tools", "samples", "checks"):
         m = re.search(rf"^{key}:\s*\[(.*)\]", head, re.M) or re.search(rf"^{key}:\s*\n((?:\s+-\s*.+\n?)+)", head, re.M)
-        out[key] = [t.strip(" -") for t in re.split(r"[,\n]", m.group(1)) if t.strip(" -")] if m else []
+        out[key] = [t.strip(" -\"'") for t in re.split(r"[,\n]", m.group(1)) if t.strip(" -\"'")] if m else []
     return out
 
 
@@ -207,7 +207,7 @@ def list_bots() -> list[dict]:
             "id": bid, "nick": nick, "label": f.get("label", ""), "file": p.name,   # label: 画面に出す英語名（呼び名はカタカナのまま）
             "desc": d.split("。", 1)[1].strip() if "。" in d else d,
             "group": f.get("group", "未分類"), "model": f.get("model", "既定"),
-            "tools": f["tools"], "samples": f["samples"],
+            "tools": f["tools"], "samples": f["samples"], "checks": f["checks"],
             "color": f.get("color", PALETTE[sum(bid.encode()) % len(PALETTE)]),   # 既定色は id から決める（ファイルが増えても変わらない）
             "shape": f.get("shape", ""), "record": f.get("record", "").lower() in ("true", "yes", "1"),
             "tasks": f.get("tasks", "").lower() in ("true", "yes", "1"), "say": f.get("say", ""),
@@ -665,7 +665,73 @@ def _build_opts(bot_id: str, agent: dict | None):
     )
 
 
-async def _talk(bot_id: str, prompt: str, *, depth: int = 0):
+VERDICT_RE = re.compile(r"\[\[\s*判定\s*[:：]\s*(OK|NG)\s*(?:[:：]\s*(.+?))?\s*\]\]", re.S | re.I)
+CHECKS = ROOT / "app" / "checks.json"            # 検証役の判定の記録（同じミスの繰り返しを教えるため。git 対象外）
+SKIP_DIRS = {".git", "app", ".venv", "node_modules", "__pycache__", "fixtures", ".claude"}
+
+
+def _take_verdict(text: str) -> tuple[str, dict | None]:
+    found = None
+
+    def _do(m):
+        nonlocal found
+        found = {"verdict": m.group(1).upper(), "issue": (m.group(2) or "").strip()}
+        return ""
+    cleaned = VERDICT_RE.sub(_do, text)
+    return (re.sub(r"\n{3,}", "\n\n", cleaned).strip() if found else text), found
+
+
+def _load_checks() -> list[dict]:
+    try:
+        return json.loads(CHECKS.read_text(encoding="utf-8")) if CHECKS.exists() else []
+    except json.JSONDecodeError:
+        return []
+
+
+def _record_check(check_of: dict, checker: str, v: dict) -> None:
+    items = _load_checks()
+    items.append({"at": datetime.now().isoformat(timespec="minutes"), "producer": check_of["producer"], "checker": checker,
+                  "files": [str(f) for f in check_of["files"]], "verdict": v["verdict"], "issue": v.get("issue", "")})
+    CHECKS.write_text(json.dumps(items[-300:], ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _changed_files(since: float) -> list[str]:
+    """since 以降に作られた・変わったファイル（ROOT からの相対パス）。作業フォルダや画像の出力は除く。"""
+    out = []
+    for p in ROOT.rglob("*"):
+        try:
+            if not p.is_file() or p.stat().st_mtime < since - 1:
+                continue
+        except OSError:
+            continue
+        rel = p.relative_to(ROOT)
+        parts = rel.parts
+        if any(part in SKIP_DIRS for part in parts[:-1]) or any(part.endswith(("_画像", "_検図")) for part in parts):
+            continue
+        if p.name.endswith(".pdf.txt") or p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webm", ".wav", ".mp3", ".m4a", ".log"):
+            continue
+        out.append(rel.as_posix())
+    return sorted(out)
+
+
+def _match_checks(rel: str, patterns: list[str]) -> bool:
+    import fnmatch
+    name = rel.rsplit("/", 1)[-1]
+    return any(fnmatch.fnmatch(rel, pat) if "/" in pat else fnmatch.fnmatch(name, pat) for pat in patterns)
+
+
+def _check_prompt(producer_nick: str, producer_id: str, files: list[str], request: str, reply: str) -> str:
+    past = [c for c in _load_checks() if c["producer"] == producer_id and c["verdict"] == "NG"][-8:]
+    hist = "\n".join(f"- {c['at'][:10]} {c['issue'] or '（理由なし）'}（{', '.join(Path(f).name for f in c['files'][:2])}）" for c in past) or "（なし）"
+    return (f"{producer_nick}が次のファイルを作った・変えた。チェックして。\n"
+            + "\n".join(f"- {f}" for f in files)
+            + f"\n\n本人（人間）の依頼:\n{request[:700]}\n\n{producer_nick}の返事:\n{reply[:900]}\n\n"
+            + f"{producer_nick}の過去の NG:\n{hist}\n\n"
+            + "判定の行（[[判定: OK]] か [[判定: NG: 種類]]）を必ず書く。NG なら [[頼む: " + producer_nick + ": …]] で本人に直し方を伝える。"
+              "過去の NG と同じ種類なら、その連絡の最後に「次から〇〇しないようにして」を必ず入れる。")
+
+
+async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | None = None):
     """1 ボットに 1 回送り、出来事を dict で yield する（text / tool / relay）。
     返事の中の [[頼む: 相手: 内容]] / [[聞く: 相手: 内容]] を拾って相手にも送り、その分も yield する。
     「聞く」は相手の返事を本人に戻して回答を続けさせる。深さは MAX_HOPS まで。"""
@@ -676,6 +742,8 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0):
     opts = _build_opts(bot_id, agent)
     reply: list[str] = []
     relays: list[dict] = []
+    verdicts: list[dict] = []
+    t_start = time.time()
 
     async def run(options):
         async for msg in query(prompt=prompt, options=options):
@@ -689,6 +757,9 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0):
                                 yield {"type": "tool", "bot": bot_id, "text": n}
                             text, found = _relay_mod().parse(text)
                             relays.extend(found)
+                            text, v = _take_verdict(text)
+                            if v:
+                                verdicts.append(v)
                         if not text.strip():
                             continue
                         reply.append(text)
@@ -725,8 +796,12 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0):
     _history.setdefault(bot_id, []).append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
     _save_history()
 
-    # 仲間への連絡（鍵は外してから。「聞く」で自分にもう一度送るため）
     me = _nick_of(bot_id)
+    if verdicts and check_of:                                  # 検証役の判定を記録する
+        _record_check(check_of, bot_id, verdicts[-1])
+        yield {"type": "tool", "bot": bot_id, "text": f"判定: {verdicts[-1]['verdict']}" + (f"（{verdicts[-1]['issue']}）" if verdicts[-1].get('issue') else "")}
+
+    # 仲間への連絡（鍵は外してから。「聞く」で自分にもう一度送るため）
     for r in relays:
         tid, tnick = _find_bot(r["to"])
         if tid is None or tid == bot_id:
@@ -757,6 +832,30 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0):
                       "上の返事を使って、本人への回答を続けてください。相手に聞き返しが必要なら本人に伝えてください。")
             async for ev in _talk(bot_id, follow, depth=depth + 1):
                 yield ev
+
+    # 成果物の自動チェック: 本人（人間）からの依頼（depth 0）でファイルを作った・変えたら、checks: の合う検証役に見てもらう
+    if depth == 0 and agent and not agent.get("checks"):
+        changed = _changed_files(t_start)
+        for chk in list_bots():
+            if chk["id"] == bot_id or not chk["checks"]:
+                continue
+            hits = [f for f in changed if _match_checks(f, chk["checks"])]
+            if not hits:
+                continue
+            yield {"type": "relay", "from": bot_id, "from_nick": me, "to": chk["id"], "to_nick": chk["nick"],
+                   "kind": "確認", "text": "、".join(Path(h).name for h in hits[:6]) + (f" ほか {len(hits)-6} 件" if len(hits) > 6 else "")}
+            now = time.time()
+            _history.setdefault(bot_id, []).append({"role": "relay", "from": me, "to": chk["nick"], "to_id": chk["id"],
+                                                    "kind": "確認", "text": "、".join(hits[:6]), "at": now})
+            cprompt = _check_prompt(me, bot_id, hits, prompt, "\n\n".join(reply))
+            _history.setdefault(chk["id"], []).append({"role": "me", "from": me, "text": cprompt, "at": now})
+            answer = []
+            async for ev in _talk(chk["id"], cprompt, depth=depth + 1, check_of={"producer": bot_id, "files": hits}):
+                if ev["type"] == "text" and ev.get("bot") == chk["id"]:
+                    answer.append(ev["text"])
+                yield ev
+            _history[bot_id].append({"role": "bot", "bot": chk["id"], "text": "\n\n".join(answer), "at": time.time()})
+            _save_history()
 
 
 @app.post("/chat")
