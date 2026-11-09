@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 ROOT = Path(__file__).resolve().parent.parent      # bot-team/
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import excel_diff      # noqa: E402
 import kizuki as kz    # noqa: E402
 import memory as mem   # noqa: E402
 import relay           # noqa: E402
@@ -687,27 +688,86 @@ def _changed_files(since: float) -> list[str]:
     return sorted(out)
 
 
+SNAPSHOTS = ROOT / "app" / "snapshots"           # ボットが触る前の Excel / CSV の控え（git 対象外。新しい順に 40 回分）
+SHEET_EXT = (".xlsx", ".xlsm", ".csv")
+SHEET_RE = re.compile(r"[^\s「」『』()（）\[\]<>|\"'`、，,]+\.(?:xlsx|xlsm|csv)(?![\w.])", re.I)
+
+
+def _rel(p: Path) -> str:
+    try:
+        return p.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(p)
+
+
+def _snapshot_sheets(bot_id: str, text: str) -> list[dict]:
+    """本文に出てくる Excel / CSV を、ボットが触る前に控える。"""
+    snaps: list[dict] = []
+    d = SNAPSHOTS / f"{datetime.now():%Y%m%d-%H%M%S-%f}-{bot_id}"
+    for m in dict.fromkeys(SHEET_RE.findall(text)):
+        p = Path(m) if Path(m).is_absolute() else ROOT / m
+        if not p.is_file() or any(s["path"] == p for s in snaps) or SNAPSHOTS in p.resolve().parents:
+            continue
+        d.mkdir(parents=True, exist_ok=True)
+        copy = d / f"{len(snaps)}-{p.name}"
+        shutil.copy2(p, copy)
+        snaps.append({"path": p, "copy": copy, "mtime": p.stat().st_mtime_ns})
+    if snaps:
+        for old in sorted(SNAPSHOTS.iterdir())[:-40]:
+            shutil.rmtree(old, ignore_errors=True)
+    return snaps
+
+
+def _sheet_changes(snaps: list[dict], since: float) -> list[tuple[str, list[str]]]:
+    """(ファイル, 前の版との差の行)。控えたファイルが変わったものと、控えたファイルを元に作った新しいファイル
+    （<元名>_見積.xlsx のように名前が元の名前で始まる）を、セル単位で比べる。"""
+    pairs = [(_rel(s["path"]), s["copy"], s["path"]) for s in snaps
+             if s["path"].exists() and s["path"].stat().st_mtime_ns != s["mtime"]]
+    for rel in _changed_files(since):
+        p = ROOT / rel
+        if p.suffix.lower() not in SHEET_EXT or any(s["path"] == p for s in snaps):
+            continue
+        base = next((s for s in snaps if p.stem.startswith(s["path"].stem) and p.suffix.lower() == s["path"].suffix.lower()), None)
+        if base:
+            pairs.append((f"{rel}（元: {base['path'].name}）", base["copy"], p))
+    out = []
+    for label, before, after in pairs:
+        try:
+            lines = excel_diff.summary(excel_diff.diff(before, after), max_cells=12) or ["変更なし"]
+        except Exception as e:  # noqa: BLE001
+            lines = [f"比べられなかった: {type(e).__name__}: {e}"]
+        out.append((label, lines))
+    return out
+
+
+def _changes_block(changes: list[tuple[str, list[str]]]) -> str:
+    body = "\n\n".join(f"`{label}`\n```\n" + "\n".join(lines) + "\n```" for label, lines in changes)
+    return f"**変えたところ**（前の版とセル単位で比べた結果。前の版は `{_rel(SNAPSHOTS)}/` に控えてある）\n\n{body}"
+
+
 def _match_checks(rel: str, patterns: list[str]) -> bool:
     import fnmatch
     name = rel.rsplit("/", 1)[-1]
     return any(fnmatch.fnmatch(rel, pat) if "/" in pat else fnmatch.fnmatch(name, pat) for pat in patterns)
 
 
-def _check_prompt(producer_nick: str, producer_id: str, files: list[str], request: str, reply: str) -> str:
+def _check_prompt(producer_nick: str, producer_id: str, files: list[str], request: str, reply: str, changes: str = "") -> str:
     past = [c for c in _load_checks() if c["producer"] == producer_id and c["verdict"] == "NG"][-8:]
     hist = "\n".join(f"- {c['at'][:10]} {c['issue'] or '（理由なし）'}（{', '.join(Path(f).name for f in c['files'][:2])}）" for c in past) or "（なし）"
     return (f"{producer_nick}が次のファイルを作った・変えた。チェックして。\n"
             + "\n".join(f"- {f}" for f in files)
             + f"\n\n本人（人間）の依頼:\n{request[:700]}\n\n{producer_nick}の返事:\n{reply[:900]}\n\n"
+            + (f"前の版との差（スクリプトでセル単位に比べた結果。本人の依頼の範囲の外が変わっていたら NG「指定外の変更」）:\n{changes}\n\n" if changes else "")
             + f"{producer_nick}の過去の NG:\n{hist}\n\n"
             + "判定の行（[[判定: OK]] か [[判定: NG: 種類]]）を必ず書く。NG なら [[頼む: " + producer_nick + ": …]] で本人に直し方を伝える。"
               "過去の NG と同じ種類なら、その連絡の最後に「次から〇〇しないようにして」を必ず入れる。")
 
 
-async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | None = None):
+async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | None = None, origin: str = ""):
     """1 ボットに 1 回送り、出来事を dict で yield する（text / tool / relay）。
     返事の中の [[頼む: 相手: 内容]] / [[聞く: 相手: 内容]] を拾って相手にも送り、その分も yield する。
-    「聞く」は相手の返事を本人に戻して回答を続けさせる。深さは MAX_HOPS まで。"""
+    「聞く」は相手の返事を本人に戻して回答を続けさせる。深さは MAX_HOPS まで。
+    origin は本人（人間）の元の依頼。仲間への連絡にも添えて、頼まれた範囲の外を直させない。"""
     from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock, query
 
     agent = _agent_def(bot_id) if bot_id != "_auto" else None
@@ -716,6 +776,11 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
     relays: list[dict] = []
     verdicts: list[dict] = []
     t_start = time.time()
+    origin = origin or prompt
+    snaps = _snapshot_sheets(bot_id, prompt) if (agent is None or agent["tools"]) else []
+    if snaps:
+        prompt += ("\n\n触る前の控え（比べる用。編集しない。直したら `python scripts/excel_diff.py <控え> <ファイル>` で頼まれた所だけ変わったか確かめる）:\n"
+                   + "\n".join(f"- {_rel(s['path'])} → {_rel(s['copy'])}" for s in snaps))
 
     async def run(options):
         async for msg in query(prompt=prompt, options=options):
@@ -765,6 +830,11 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
                     yield ev
             else:
                 raise
+    changes = _sheet_changes(snaps, t_start) if snaps else []
+    if changes:
+        block = _changes_block(changes)
+        reply.append(block)
+        yield {"type": "text", "bot": bot_id, "text": block}
     _history.setdefault(bot_id, []).append({"role": "bot", "text": "\n\n".join(reply), "at": time.time()})
     _save_history()
 
@@ -789,11 +859,11 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
                                                 "kind": r["kind"], "text": r["text"], "at": now})
         _history.setdefault(tid, []).append({"role": "me", "from": me, "text": r["text"], "at": now})
         tprompt = (f"{me}からの連絡です（本人ではなく仲間のボットから。本人に確認したいことがあれば、そのまま聞き返す文を返してよい）:\n"
-                   f"{r['text']}")
+                   f"{r['text']}\n\n本人（人間）の元の依頼（ファイルを変えてよいのはこの範囲だけ。外の変更を求められたら変えずに本人に聞く）:\n{origin[:700]}")
         if tid == "_auto":
             tprompt = "ウッディ、" + tprompt
         answer: list[str] = []
-        async for ev in _talk(tid, tprompt, depth=depth + 1):
+        async for ev in _talk(tid, tprompt, depth=depth + 1, origin=origin):
             if ev["type"] == "text" and ev.get("bot") == tid:
                 answer.append(ev["text"])
             yield ev
@@ -802,7 +872,7 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
         if r["kind"] == "聞く":
             follow = (f"{tnick}からの返事:\n{chr(10).join(answer) if answer else '（返事なし）'}\n\n"
                       "上の返事を使って、本人への回答を続けてください。相手に聞き返しが必要なら本人に伝えてください。")
-            async for ev in _talk(bot_id, follow, depth=depth + 1):
+            async for ev in _talk(bot_id, follow, depth=depth + 1, origin=origin):
                 yield ev
 
     # 成果物の自動チェック: 本人（人間）からの依頼（depth 0）でファイルを作った・変えたら、checks: の合う検証役に見てもらう
@@ -819,10 +889,11 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
             now = time.time()
             _history.setdefault(bot_id, []).append({"role": "relay", "from": me, "to": chk["nick"], "to_id": chk["id"],
                                                     "kind": "確認", "text": "、".join(hits[:6]), "at": now})
-            cprompt = _check_prompt(me, bot_id, hits, prompt, "\n\n".join(reply))
+            diff_text = "\n".join(f"{label}\n" + "\n".join(lines) for label, lines in changes)
+            cprompt = _check_prompt(me, bot_id, hits, origin, "\n\n".join(reply), diff_text)
             _history.setdefault(chk["id"], []).append({"role": "me", "from": me, "text": cprompt, "at": now})
             answer = []
-            async for ev in _talk(chk["id"], cprompt, depth=depth + 1, check_of={"producer": bot_id, "files": hits}):
+            async for ev in _talk(chk["id"], cprompt, depth=depth + 1, check_of={"producer": bot_id, "files": hits}, origin=origin):
                 if ev["type"] == "text" and ev.get("bot") == chk["id"]:
                     answer.append(ev["text"])
                 yield ev

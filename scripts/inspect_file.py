@@ -19,13 +19,24 @@ def holes(text: str) -> str:
     return "穴埋め語: " + (", ".join(f"{k}×{v}" for k, v in found.items()) if found else "なし")
 
 
+def _with_header(raw):
+    """表の上にタイトル行があっても、先頭 15 行でいちばん埋まっている行を見出しにする。"""
+    if raw.empty:
+        return raw
+    filled = raw.head(15).notna().sum(axis=1)
+    h = int(filled.idxmax())
+    df = raw.iloc[h + 1:].reset_index(drop=True)
+    df.columns = [str(v) if v == v and v is not None else f"(列{i + 1})" for i, v in enumerate(raw.iloc[h])]
+    return df
+
+
 def show_table(p: Path) -> None:
     import pandas as pd
     if p.suffix.lower() == ".csv":
         df = pd.read_csv(p, encoding="utf-8-sig")
         sheets = {"(csv)": df}
     else:
-        sheets = pd.read_excel(p, sheet_name=None)
+        sheets = {name: _with_header(raw) for name, raw in pd.read_excel(p, sheet_name=None, header=None).items()}
     for name, df in sheets.items():
         print(f"  シート {name}: {len(df)} 行 × {len(df.columns)} 列")
         print("  列: " + ", ".join(str(c) for c in df.columns))

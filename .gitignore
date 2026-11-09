@@ -16,3 +16,4 @@ app/tasks.json
 app/kizuki.json
 app/checks.json
 app/memory/
+app/snapshots/

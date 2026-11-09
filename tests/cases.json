@@ -92,6 +92,48 @@
     ]
   },
   {
+    "name": "excel_diff-変わったセルだけ出す",
+    "cmd": "python scripts/excel_diff.py {fx}/bom2.xlsx {fx}/out.xlsx --max 40",
+    "exit": 1,
+    "contains": [
+      "Sheet: 28 セル（G2:L6 の範囲）",
+      "G2: （空） → A商社 単価",
+      "G3: （空） → 150000"
+    ],
+    "not_contains": [
+      "  B3:",
+      "  E3:",
+      "シートを"
+    ]
+  },
+  {
+    "name": "excel_diff-同じなら変更なし",
+    "cmd": "python scripts/excel_diff.py {fx}/bom2.xlsx {fx}/bom2.xlsx",
+    "exit": 0,
+    "contains": [
+      "変更なし"
+    ]
+  },
+  {
+    "name": "excel_diff-CSVも比べる",
+    "cmd": "python scripts/excel_diff.py {fx}/order.csv {fx}/order.csv",
+    "exit": 0,
+    "contains": [
+      "変更なし"
+    ]
+  },
+  {
+    "name": "inspect_file-タイトル行を飛ばして見出しを読む",
+    "cmd": "python scripts/inspect_file.py {fx}/out.xlsx",
+    "exit": 0,
+    "contains": [
+      "列: No, 型式, 品名, メーカ, 数量, 備考, A商社 単価"
+    ],
+    "not_contains": [
+      "Unnamed"
+    ]
+  },
+  {
     "name": "slinky-フィラー除去",
     "cmd": "python scripts/transcribe.py {fx}/raw.txt --clean-only --out {fx}/clean.txt",
     "exit": 0,
