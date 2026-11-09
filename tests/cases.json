@@ -40,6 +40,22 @@
     ]
   },
   {
+    "name": "potato-PDF化はExcelだけ",
+    "cmd": "python scripts/export_pdf.py {fx}/order.csv",
+    "exit": 2,
+    "contains": [
+      "Excelファイルではありません"
+    ]
+  },
+  {
+    "name": "potato-PDF化は既存を上書きしない",
+    "cmd": "python scripts/export_pdf.py {fx}/bom.xlsx --out {fx}/order.csv",
+    "exit": 3,
+    "contains": [
+      "出力先が既に存在するため中止"
+    ]
+  },
+  {
     "name": "rex-転記と要確認",
     "cmd": "python scripts/fill_prices.py {fx}/bom2.xlsx {fx}/score2.xlsx --with-amount --out {fx}/out.xlsx",
     "exit": 1,

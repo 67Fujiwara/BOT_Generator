@@ -9,3 +9,4 @@ openai
 httpx
 reportlab
 pypdfium2
+pywin32; sys_platform == "win32"
