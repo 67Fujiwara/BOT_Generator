@@ -339,5 +339,41 @@
     "contains": [
       "見つからない"
     ]
+  },
+  {
+    "name": "pdftext-CIDフォントの日本語",
+    "cmd": "python scripts/pdftext.py {fx}/cid_jp.pdf",
+    "exit": 0,
+    "contains": [
+      "電気図面",
+      "端子台",
+      "KM1"
+    ],
+    "not_contains": [
+      "(cid:"
+    ]
+  },
+  {
+    "name": "make_pdf-日本語PDFを作る",
+    "cmd": "python scripts/make_pdf.py {fx}/memo.md --out {fx}/memo.pdf --title 議事録",
+    "exit": 0,
+    "contains": [
+      "PDF: "
+    ]
+  },
+  {
+    "name": "make_pdf-往復で日本語が戻る",
+    "cmd": "python scripts/pdftext.py {fx}/memo.pdf",
+    "exit": 0,
+    "contains": [
+      "定例会議",
+      "決定事項",
+      "端子台",
+      "藤原"
+    ],
+    "not_contains": [
+      "(cid:",
+      "〓"
+    ]
   }
 ]

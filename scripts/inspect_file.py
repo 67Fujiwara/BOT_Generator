@@ -49,10 +49,15 @@ def show_text(p: Path) -> None:
 
 
 def show_pdf(p: Path) -> None:
-    import pdfplumber
-    with pdfplumber.open(str(p)) as pdf:
-        txt = (pdf.pages[0].extract_text() or "") if pdf.pages else ""
-        print(f"  {len(pdf.pages)} ページ。1 ページ目の先頭: {txt[:300]!r}")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from pdftext import page_texts        # 日本語 CID フォント対応
+    recs = page_texts(p)
+    empties = [r["page"] for r in recs if not r["text"].strip()]
+    first = next((r for r in recs if r["text"].strip()), None)
+    print(f"  {len(recs)} ページ。文字が取れないページ: {empties or 'なし'}")
+    if first:
+        print(f"  p.{first['page']}（{first['engine']}）の先頭: {first['text'][:300]!r}")
+        print("  " + holes("\n".join(r["text"] for r in recs)))
 
 
 def main(argv: list[str]) -> int:

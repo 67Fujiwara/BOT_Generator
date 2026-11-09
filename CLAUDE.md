@@ -36,6 +36,10 @@ API キーは起動後の画面左上 ⚙ で保存する（`app/config.json` �
 ## 画像を見せる（全ボット共通。詳細は `.claude/bot_rules.md`）
 どのボットも返事に `![説明](/files/<ROOTからの相対パス>)` と書けば画像が出る（`inbox/` と `samples/` の下だけ配信）。ドロップした画像は本文の「ファイル:」に `表示: ![…](/files/inbox/…)` の行が付くので、その行を貼るだけで見せられる（ツールの無いハムでも可）。PDF のページや画像の一部は `scripts/show_image.py pages|crop|show` が 1 回の Bash で `<名前>_画像/` に作って貼る行を出す（inbox/samples の外のファイルは `inbox/画像_<日時>/` にコピーして配信）。画像は根拠を示すときに使い、1 返事 6 枚まで。
 
+## PDF の読み書き（全ボット共通。日本語フォント = Adobe-Japan1 対応。詳細は `.claude/bot_rules.md`）
+読む: `scripts/pdftext.py <PDF>` が pdfminer → Adobe-Japan1 の CID→Unicode 表（pdfminer 同梱）→ PDFium（pypdfium2）の順で文字を取る。日本語 CAD / 見積 / マニュアルの PDF で「(cid:…)」や空になる問題を吸収する。`check_drawing.py`（検図の文字・マニュアル）と `inspect_file.py` もこれを使う。全部空なら「文字が取れないページ」と言い、`show_image.py pages` で画像にして目視する。
+作る: `scripts/make_pdf.py <md> --out <pdf> --title <題>` が Markdown / テキストを日本語 PDF にする（見出し・箇条書き・番号・表・引用・コード・画像、A4 縦 / `--landscape`、フッターにページ番号）。フォントは `--font` / `BOT_PDF_FONT` / `samples/_fonts/` / OS の日本語フォント（メイリオ・游ゴシック・BIZ UD・MS ゴシック・ヒラギノ・Noto CJK・IPA）の順で探して埋め込み、無ければ Adobe-Japan1 の CID フォント HeiseiKakuGo-W5（埋め込みなし）。出力の「リンク: […](/files/…)」を返事に貼る。依存: reportlab, pypdfium2（requirements.txt）。
+
 ## 返事の通知（全ボット共通）
 返事に 3 秒以上かかったとき、または別タブ・別アプリを見ている間に返事が来たときは、画面右下のポップアップ（ボットのアイコン＋話し言葉の一言＋本文の冒頭）とブラウザ通知（許可時、アイコン付き）で知らせる。一言はフロントマター `say:`（例: ハム「文、整えといたよ〜」）。返事が聞き返しなら「ちょっと聞きたいことがあるよ」に変わる。クリックでそのボットの画面へ。初回送信時に通知の許可を求める。
 

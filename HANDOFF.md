@@ -141,6 +141,10 @@ claude-agent-sdk は Claude Code からの 1 メッセージが 1MB を超える
 
 `_talk()` の depth 0 の終わりに `_changed_files(t_start)`（ROOT を mtime で走査、app/.git/.venv/fixtures/_画像/_検図/画像・音声・log を除外）→ `checks:` を持つボット（バズ: *.xlsx/*.csv/*.md/*.txt/scripts/*.py/tests/*、エイリアン: *.pdf）にグロブで振り分け → relay(kind=確認) → `_talk(checker, _check_prompt(...), depth=1, check_of=...)`。検証役の `[[判定: OK|NG: 種類]]` は `_take_verdict` が外して `app/checks.json` に記録。プロンプトにその作成者の過去 NG（最大 8）を入れ、同種なら「次から〜しないようにして」を書かせる → 作成者側は bot_rules の記憶ルールで `[[覚える]]`。NG の `[[頼む]]` は既存の relay 経路（depth 2）で作成者に届く。再チェックは自動では回さない（コストと往復の上限）。`scripts/inspect_file.py` が Excel/CSV/md/txt/PDF の要約を 1 回で出す。
 
+## PDF の日本語（Adobe-Japan1）（2026-11-09）
+
+読み: `scripts/pdftext.py`（`page_texts` / `fix_cid` / `text_of`）。pdfminer の `(cid:N)` を `CMapDB.get_unicode_map('Adobe-Japan1')` で文字に直し、ダメなら pypdfium2。check_drawing（words の fix_cid、manual_text）と inspect_file が利用。書き: `scripts/make_pdf.py`（reportlab。TTF/TTC 埋め込み、無ければ UnicodeCIDFont HeiseiKakuGo-W5）。テストは make_pdf → pdftext の往復で日本語が戻ることを見る。Windows 実機のフォント検出（meiryo.ttc 等）は未検証。
+
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 
 | 経路 | 時間 | 備考 |

@@ -7,3 +7,5 @@ python-multipart
 claude-agent-sdk
 openai
 httpx
+reportlab
+pypdfium2

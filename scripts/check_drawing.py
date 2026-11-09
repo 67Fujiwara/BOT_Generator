@@ -31,6 +31,9 @@ from pathlib import Path
 
 import pdfplumber
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pdftext import fix_cid, text_of   # 日本語 CID フォント（Adobe-Japan1）対応の文字取り出し
+
 TAG_RE = re.compile(r"^(?:KM|MC|MS|CR|RY|R|X|Y|M|T|C|F|FU|CB|MCCB|ELB|ELCB|NFB|SW|COS|PB|PBL|LS|PS|PXS|TB|PLC|SS|BZ|PL|CP|TR|THR|OL|SOL|SV|FAN|INV|VFD|SVR|AMP|ENC|HMI|PT|CT|MCB|TH|FLS|LV|HT|CN|JB)-?\d{1,4}[A-Z]?(?:-\d{1,3})?$", re.I)
 WIRE_RE = re.compile(r"^\d{3,4}$")
 PAGE_RE = re.compile(r"^(\d{1,3})/(\d{1,3})$")
@@ -84,7 +87,7 @@ def analyze(pdf_path: Path, out: Path, dpi: int) -> dict:
                 continue
             W, H = page.width, page.height
             for w in words:
-                t, bb = w["text"].strip(), (w["x0"], w["top"], w["x1"], w["bottom"])
+                t, bb = fix_cid(w["text"]).strip(), (w["x0"], w["top"], w["x1"], w["bottom"])
                 tn = unicodedata.normalize("NFKC", t)
                 m = PAGE_RE.match(tn)
                 if m and w["top"] > H * 0.7:
@@ -167,12 +170,7 @@ def manual_text(path: Path) -> str:
     cache = path.with_suffix(path.suffix + ".txt")
     if cache.exists() and cache.stat().st_mtime >= path.stat().st_mtime:
         return cache.read_text(encoding="utf-8", errors="replace")
-    parts = []
-    with pdfplumber.open(str(path)) as pdf:
-        for i, page in enumerate(pdf.pages, 1):
-            t = (page.extract_text() or "").strip()
-            parts.append(f"=== p.{i} ===\n{t if t else '（文字なし: 画像ページ）'}")
-    text = "\n".join(parts)
+    text = text_of(path)     # pdfminer → Adobe-Japan1 CID 表 → PDFium の順で取る（日本語 CAD / 見積の PDF 対応）
     cache.write_text(text, encoding="utf-8")
     return text
 

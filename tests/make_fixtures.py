@@ -42,6 +42,16 @@ def main():
     for stale in ("kizuki.json", "tasks.json"):      # 前回のケースが残した保存ファイルは消す（id が 1 から始まる前提）
         (OUT / stale).unlink(missing_ok=True)
     shutil.rmtree(OUT / "drawing_画像", ignore_errors=True)
+    (OUT / "memo.md").write_text("# 定例会議 議事録\n\n- 決定事項: 盤図の改訂は来週後半\n- ToDo: 端子台の型式を確認\n\n| 項目 | 担当 |\n|---|---|\n| 見積 | 藤原 |\n", encoding="utf-8")
+    try:                                   # Adobe-Japan1 の CID フォント（埋め込みなし）だけで書いた PDF。pdftext の読み取りテスト用
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from reportlab.pdfgen import canvas
+        pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
+        c = canvas.Canvas(str(OUT / "cid_jp.pdf")); c.setFont("HeiseiKakuGo-W5", 12)
+        c.drawString(72, 760, "電気図面 検図 マニュアル 端子台 KM1"); c.showPage(); c.save()
+    except Exception:
+        pass
     # ポテト用: BOM(Excel) と 発注書(CSV、列名違い・小計行・全角型式)
     pd.DataFrame({"型式": ["KV-8000", "KV-N24AR", "MR-J4-10A", "ＦＸ５Ｕ－32MR"], "品名": ["PLC", "拡張", "サーボ", "PLC"],
                   "数量": [1, 2, 3, 1], "単価": [150000, 30000, 80000, 50000], "メーカ": ["KEYENCE", "KEYENCE", "三菱", "三菱"]}
