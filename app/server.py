@@ -25,6 +25,12 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parent.parent      # bot-team/
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import kizuki as kz    # noqa: E402
+import memory as mem   # noqa: E402
+import relay           # noqa: E402
+import tasks as tk     # noqa: E402
 
 
 def _hide_child_windows():
@@ -76,8 +82,6 @@ VERSION = _git_version()
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
 # ボットが作った画像（検図の切り抜きなど）をチャットに表示するため、inbox と samples だけ読み取り公開する
-INBOX = ROOT / "inbox"
-SAMPLES = ROOT / "samples"
 INBOX.mkdir(exist_ok=True); SAMPLES.mkdir(exist_ok=True)
 app.mount("/files/inbox", StaticFiles(directory=INBOX), name="files-inbox")
 app.mount("/files/samples", StaticFiles(directory=SAMPLES), name="files-samples")
@@ -123,6 +127,7 @@ def _sdk_env() -> dict[str, str]:
         env["SLINKY_GLOSSARY"] = cfg["glossary"]
     if cfg.get("cf_account_id") and cfg.get("cf_api_token"):   # Cloudflare Workers AI（無料枠）
         env["CF_ACCOUNT_ID"], env["CF_API_TOKEN"] = cfg["cf_account_id"], cfg["cf_api_token"]
+    env["PYTHONUTF8"] = "1"   # 日本語版 Windows の既定 cp932 だと、ボットが Bash で回すスクリプトの出力が化ける
     eng = cfg.get("transcribe_engine", "auto")
     if eng == "auto":
         eng = "cloudflare" if cfg.get("cf_api_token") else "openai" if cfg.get("openai_api_key") else "whisper"
@@ -150,18 +155,38 @@ def _auth_hint(text: str) -> str:
     return text
 
 
-def _front(path: Path) -> dict:
+FLAG_KEYS = ("record", "tasks", "kizuki")
+
+
+def _parse_agent(path: Path) -> dict:
+    """フロントマター＋本文。フラグ（record / tasks / kizuki）は bool、tools / samples / checks は list にして返す。"""
     txt = path.read_text(encoding="utf-8")
     head = txt.split("---")[1] if txt.startswith("---") else ""
-    out = {}
-    for key in ("name", "label", "description", "model", "group", "color", "shape", "record", "tasks", "kizuki", "say"):
+    out = {"name": path.stem, "file": path.name, "body": txt.split("---", 2)[2].strip() if txt.startswith("---") else txt}
+    for key in ("name", "label", "description", "model", "group", "color", "shape", "say", *FLAG_KEYS):
         m = re.search(rf"^{key}:\s*(.+)$", head, re.M)
         if m:
             out[key] = m.group(1).strip().strip('"\'')   # YAML で "#FDD663" のように引用符付きでも可
+    for key in FLAG_KEYS:
+        out[key] = out.get(key, "").lower() in ("true", "yes", "1")
     for key in ("tools", "samples", "checks"):
         m = re.search(rf"^{key}:\s*\[(.*)\]", head, re.M) or re.search(rf"^{key}:\s*\n((?:\s+-\s*.+\n?)+)", head, re.M)
         out[key] = [t.strip(" -\"'") for t in re.split(r"[,\n]", m.group(1)) if t.strip(" -\"'")] if m else []
     return out
+
+
+_agents_cache: tuple[tuple, dict[str, dict]] = ((), {})
+
+
+def _agents() -> dict[str, dict]:
+    """{id: 定義}（ファイル名順）。md の追加・編集は更新時刻で気づいて読み直す（再起動不要）。"""
+    global _agents_cache
+    files = sorted(AGENTS_DIR.glob("*.md"))
+    stamp = tuple((p.name, p.stat().st_mtime_ns) for p in files)
+    if stamp != _agents_cache[0]:
+        defs = [_parse_agent(p) for p in files]
+        _agents_cache = (stamp, {d["name"]: d for d in defs})
+    return _agents_cache[1]
 
 
 def _safe_name(name: str) -> str:
@@ -185,33 +210,24 @@ def list_samples(bot_id: str, labels: list[str]) -> dict[str, list[str]]:
 
 def _agent_def(bot_id: str) -> dict | None:
     """ボット定義（フロントマター＋本文）。本文はそのままシステムプロンプトに使う。"""
-    for p in AGENTS_DIR.glob("*.md"):
-        f = _front(p)
-        if f.get("name", p.stem) == bot_id:
-            txt = p.read_text(encoding="utf-8")
-            body = txt.split("---", 2)[2].strip() if txt.startswith("---") else txt
-            return {**f, "body": body}
-    return None
+    return _agents().get(bot_id)
 
 
 def list_bots() -> list[dict]:
     """.claude/agents/*.md のフロントマターから一覧を作る。"""
     bots = []
-    for i, p in enumerate(sorted(AGENTS_DIR.glob("*.md"))):
-        f = _front(p)
-        bid = f.get("name", p.stem)
+    for bid, f in _agents().items():
         d = f.get("description", "")
         nick = d.split("。")[0] if "。" in d else bid
         last = (_history.get(bid) or [{}])[-1]
         bots.append({
-            "id": bid, "nick": nick, "label": f.get("label", ""), "file": p.name,   # label: 画面に出す英語名（呼び名はカタカナのまま）
+            "id": bid, "nick": nick, "label": f.get("label", ""), "file": f["file"],   # label: 画面に出す英語名（呼び名はカタカナのまま）
             "desc": d.split("。", 1)[1].strip() if "。" in d else d,
             "group": f.get("group", "未分類"), "model": f.get("model", "既定"),
             "tools": f["tools"], "samples": f["samples"], "checks": f["checks"],
             "color": f.get("color", PALETTE[sum(bid.encode()) % len(PALETTE)]),   # 既定色は id から決める（ファイルが増えても変わらない）
-            "shape": f.get("shape", ""), "record": f.get("record", "").lower() in ("true", "yes", "1"),
-            "tasks": f.get("tasks", "").lower() in ("true", "yes", "1"), "say": f.get("say", ""),
-            "kizuki": f.get("kizuki", "").lower() in ("true", "yes", "1"),
+            "shape": f.get("shape", ""), "record": f["record"], "tasks": f["tasks"], "kizuki": f["kizuki"],
+            "say": f.get("say", ""),
             "preview": (last.get("text") or "")[:60].replace("\n", " "),
             "status": "",
         })
@@ -285,8 +301,6 @@ def _engine_for_chunks(cfg: dict) -> str:
 async def transcribe_chunk(audio: UploadFile = File(...), seq: int = Form(0), startSec: float = Form(0.0),
                            language: str = Form("ja"), glossary: str = Form(""), prev: str = Form(""),
                            meeting: str = Form("")):
-    import sys as _sys
-    _sys.path.insert(0, str(ROOT / "scripts"))
     import transcribe as tr   # scripts/transcribe.py
 
     cfg = _load_config()
@@ -337,23 +351,13 @@ def transcribe_finish(meeting: str = Form(""), text: str = Form("")):
 
 
 # ---- 覚えている指示（やり方の好み）: scripts/memory.py。返事の [[覚える: …]] を拾って保存し、次回から指示に付ける ----
-def _memory_mod():
-    import sys as _sys
-    if str(ROOT / "scripts") not in _sys.path:
-        _sys.path.insert(0, str(ROOT / "scripts"))
-    import memory as mem
-    return mem
-
-
 @app.get("/memory/{bot}")
 def get_memory(bot: str):
-    mem = _memory_mod()
     return {"mine": mem.load(bot), "all": mem.load(mem.ALL) if bot != mem.ALL else []}
 
 
 @app.post("/memory/{bot}")
 def add_memory(bot: str, text: str = Form(...)):
-    mem = _memory_mod()
     if not text.strip():
         return {"ok": False, "error": "内容を入れてください"}
     mem.add(bot, text)
@@ -362,48 +366,36 @@ def add_memory(bot: str, text: str = Form(...)):
 
 @app.delete("/memory/{bot}")
 def delete_memory(bot: str, key: str):
-    mem = _memory_mod()
     gone = mem.remove(bot, key)
     return {"ok": True, "removed": [g["text"] for g in gone], **get_memory(bot)}
 
 
 # ---- タスク（ジェシー）: scripts/tasks.py と同じ app/tasks.json を読む ----------------------------
-def _tasks_mod():
-    import sys as _sys
-    if str(ROOT / "scripts") not in _sys.path:
-        _sys.path.insert(0, str(ROOT / "scripts"))
-    import tasks as tk
-    return tk
-
-
-def _task_view(t: dict, tk) -> dict:
+def _task_view(t: dict) -> dict:
     return {**t, "status": tk.status(t), "text": tk.fmt(t)}
 
 
 @app.get("/tasks")
 def get_tasks(all: bool = False):
-    tk = _tasks_mod()
     order = {"期限切れ": 0, "すぐ": 1, "今日まで": 2, "期間内": 3, "予定": 4, "納期なし": 5, "完了": 6}
     ts = [t for t in tk._load() if all or not t.get("done")]
     ts.sort(key=lambda x: (order[tk.status(x)], x.get("due_end") or "9999", x["id"]))
-    return {"today": datetime.now().date().isoformat(), "tasks": [_task_view(t, tk) for t in ts]}
+    return {"today": datetime.now().date().isoformat(), "tasks": [_task_view(t) for t in ts]}
 
 
 @app.post("/tasks")
 def add_task(title: str = Form(...), due: str = Form(""), note: str = Form("")):
-    tk = _tasks_mod()
     if not title.strip():
         return {"ok": False, "error": "タスク名を入れてください"}
     try:
         t = tk.add_task(title, due or "なし", note)
     except ValueError:
         return {"ok": False, "error": f"納期「{due}」を解釈できません。すぐ / 今週中 / 今月中旬 / 11/20 / なし のように入れてください。"}
-    return {"ok": True, "task": _task_view(t, tk)}
+    return {"ok": True, "task": _task_view(t)}
 
 
 @app.post("/tasks/{task_id}/{action}")
 def task_action(task_id: int, action: str, text: str = Form("")):
-    tk = _tasks_mod()
     tasks = tk._load()
     t = next((x for x in tasks if x["id"] == task_id), None)
     if not t:
@@ -431,17 +423,8 @@ def task_action(task_id: int, action: str, text: str = Form("")):
     return {"ok": True}
 
 
-def _kizuki_mod():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("kizuki", ROOT / "scripts" / "kizuki.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 @app.get("/kizuki")
 def kizuki_list(all: bool = False):
-    kz = _kizuki_mod()
     items = kz._load()
     if not all:
         items = [x for x in items if x.get("status") == "open"]
@@ -450,7 +433,6 @@ def kizuki_list(all: bool = False):
 
 @app.post("/kizuki")
 def kizuki_add(text: str = Form(...), note: str = Form("")):
-    kz = _kizuki_mod()
     if not text.strip():
         return {"ok": False, "error": "気づきが空です"}
     return {"ok": True, "item": kz.add(text, note)}
@@ -458,7 +440,6 @@ def kizuki_add(text: str = Form(...), note: str = Form("")):
 
 @app.post("/kizuki/{item_id}/{action}")
 def kizuki_action(item_id: int, action: str):
-    kz = _kizuki_mod()
     items = kz._load()
     it = next((x for x in items if x["id"] == item_id), None)
     if not it:
@@ -590,14 +571,6 @@ MAX_HOPS = 3                                   # ボット間の連絡の深さ�
 MAX_MSG_BYTES = 64 * 1024 * 1024               # Claude Code から受ける 1 メッセージの上限。既定 1MB だと図面のページ画像や長い出力で落ちる
 
 
-def _relay_mod():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("relay", ROOT / "scripts" / "relay.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def _nick_of(bot_id: str) -> str:
     if bot_id == "_auto":
         return "ウッディ"
@@ -636,7 +609,7 @@ def _build_opts(bot_id: str, agent: dict | None):
         if BOT_RULES.exists():
             body += "\n\n" + BOT_RULES.read_text(encoding="utf-8").strip()
         body += "\n\n" + _team_block(bot_id)
-        remembered = _memory_mod().prompt_block(bot_id)
+        remembered = mem.prompt_block(bot_id)
         if remembered:
             body += "\n\n" + remembered
         sys_prompt = ({"type": "preset", "preset": "claude_code", "append": body}
@@ -735,7 +708,6 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
     """1 ボットに 1 回送り、出来事を dict で yield する（text / tool / relay）。
     返事の中の [[頼む: 相手: 内容]] / [[聞く: 相手: 内容]] を拾って相手にも送り、その分も yield する。
     「聞く」は相手の返事を本人に戻して回答を続けさせる。深さは MAX_HOPS まで。"""
-    import asyncio
     from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock, query
 
     agent = _agent_def(bot_id) if bot_id != "_auto" else None
@@ -752,10 +724,10 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
                     if isinstance(b, TextBlock) and b.text.strip():
                         text = b.text
                         if "[[" in text:
-                            text, notes = _memory_mod().apply_tags(bot_id, text)
+                            text, notes = mem.apply_tags(bot_id, text)
                             for n in notes:
                                 yield {"type": "tool", "bot": bot_id, "text": n}
-                            text, found = _relay_mod().parse(text)
+                            text, found = relay.parse(text)
                             relays.extend(found)
                             text, v = _take_verdict(text)
                             if v:
@@ -899,16 +871,14 @@ async def chat(message: str = Form(""), bot: str = Form(""), new_session: bool =
             lines.append(line)
         prompt += "\n\nファイル:\n" + "\n".join(lines)
     if not agent:                                   # ウッディ（おまかせ）経路: 覚えている指示を本文の先頭に添える
-        remembered = _memory_mod().prompt_block(bot_id)
+        remembered = mem.prompt_block(bot_id)
         if remembered:
             prompt = remembered + "\n\n" + prompt
-    if agent and agent.get("kizuki", "").lower() in ("true", "yes", "1"):   # アンディ: 未着手の気づき一覧を先頭に添える
-        kz = _kizuki_mod()
+    if agent and agent["kizuki"]:   # アンディ: 未着手の気づき一覧を先頭に添える
         open_k = [x for x in kz._load() if x.get("status") == "open"]
         head = "未着手の気づき:\n" + ("\n".join(kz.fmt(x) for x in open_k) if open_k else "（なし）")
         prompt = head + "\n\n依頼:\n" + prompt
-    if agent and agent.get("tasks", "").lower() in ("true", "yes", "1"):
-        tk = _tasks_mod()
+    if agent and agent["tasks"]:
         open_tasks = [t for t in tk._load() if not t.get("done")]
         head = "現在の未完了タスク:\n" + ("\n".join(tk.fmt(t) for t in open_tasks) if open_tasks else "（なし）")
         prompt = head + "\n\n依頼:\n" + prompt

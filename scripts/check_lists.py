@@ -8,6 +8,7 @@
 終了コード: 差分なし 0 / 差分あり 1 / 抽出失敗 2
 """
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +17,8 @@ HERE = Path(__file__).resolve().parent
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, *args], capture_output=True, text=True, encoding="utf-8")
+    return subprocess.run([sys.executable, *args], capture_output=True, text=True, encoding="utf-8",
+                          env={**os.environ, "PYTHONUTF8": "1"})   # 子の出力を UTF-8 に揃える（既定 cp932 だと読めない）
 
 
 def extract(src: str, cols: list[str]) -> str:

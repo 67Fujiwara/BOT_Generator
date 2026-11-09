@@ -9,6 +9,7 @@ tests/cases.json の各ケースを実行し、終了コードと標準出力の
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -16,6 +17,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+ENV = {**os.environ, "PYTHONUTF8": "1"}   # 子の出力を UTF-8 に揃える（日本語版 Windows の既定は cp932）
 
 
 def main():
@@ -24,7 +26,7 @@ def main():
     ap.add_argument("-v", action="store_true")
     a = ap.parse_args()
 
-    r = subprocess.run([sys.executable, str(HERE / "make_fixtures.py")], capture_output=True, text=True, encoding="utf-8")
+    r = subprocess.run([sys.executable, str(HERE / "make_fixtures.py")], capture_output=True, text=True, encoding="utf-8", env=ENV)
     if r.returncode != 0:
         sys.exit("検証用ファイルの生成に失敗:\n" + (r.stderr or r.stdout).strip().splitlines()[-1])
     fx = str((HERE / "fixtures").relative_to(ROOT)).replace("\\", "/")
@@ -38,7 +40,7 @@ def main():
         if cmd[0] == "python":
             cmd[0] = sys.executable
         t0 = time.time()
-        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", env=ENV)
         out = r.stdout + r.stderr
         problems = []
         if "exit" in c and r.returncode != c["exit"]:
