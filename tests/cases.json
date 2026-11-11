@@ -134,6 +134,97 @@
     ]
   },
   {
+    "name": "excel_edit-セルを1つ変える",
+    "cmd": "python scripts/excel_edit.py apply {fx}/bom2.xlsx --out {fx}/edited.xlsx --set C3=テスト",
+    "exit": 0,
+    "contains": [
+      "Sheet: 1 セル",
+      "C3: PLC → テスト",
+      "出力"
+    ]
+  },
+  {
+    "name": "excel_edit-変えたのはそのセルだけ",
+    "cmd": "python scripts/excel_diff.py {fx}/bom2.xlsx {fx}/edited.xlsx",
+    "exit": 1,
+    "contains": [
+      "1 セル",
+      "C3"
+    ]
+  },
+  {
+    "name": "excel_edit-applyで変えたセルは戻さない",
+    "cmd": "python scripts/excel_edit.py enforce {fx}/bom2.xlsx {fx}/edited.xlsx",
+    "exit": 0,
+    "contains": [
+      "範囲外の変更なし"
+    ]
+  },
+  {
+    "name": "excel_edit-sinceより前の記録は使わない",
+    "cmd": "python scripts/excel_edit.py enforce {fx}/bom2.xlsx {fx}/edited.xlsx --since 9999999999",
+    "exit": 1,
+    "contains": [
+      "戻した: Sheet!C3 (テスト → PLC)"
+    ]
+  },
+  {
+    "name": "excel_edit-変な参照は2",
+    "cmd": "python scripts/excel_edit.py apply {fx}/bom2.xlsx --out {fx}/edited2.xlsx --set ZZZZ=1",
+    "exit": 2,
+    "contains": [
+      "ZZZZ"
+    ]
+  },
+  {
+    "name": "excel_edit-ないシートは2",
+    "cmd": "python scripts/excel_edit.py apply {fx}/bom2.xlsx --out {fx}/edited2.xlsx --set ないシート!C3=1",
+    "exit": 2,
+    "contains": [
+      "ないシート"
+    ]
+  },
+  {
+    "name": "excel_edit-CSVのセルを変える",
+    "cmd": "python scripts/excel_edit.py apply {fx}/order.csv --out {fx}/edited.csv --set B2=リレー",
+    "exit": 0,
+    "contains": [
+      "(csv): 1 セル",
+      "B2: PLC → リレー"
+    ]
+  },
+  {
+    "name": "excel_edit-範囲外を控えに戻す",
+    "cmd": "python scripts/excel_edit.py enforce {fx}/bom2.xlsx {fx}/bom2_dirty.xlsx --allow C3",
+    "exit": 1,
+    "contains": [
+      "戻した: Sheet!F5 (余計 → （空）)"
+    ],
+    "not_contains": [
+      "C3"
+    ]
+  },
+  {
+    "name": "excel_edit-戻した後は頼まれた所だけ",
+    "cmd": "python scripts/excel_diff.py {fx}/bom2.xlsx {fx}/bom2_dirty.xlsx",
+    "exit": 1,
+    "contains": [
+      "1 セル",
+      "C3: PLC → 編集済"
+    ],
+    "not_contains": [
+      "F5"
+    ]
+  },
+  {
+    "name": "rex-足した列は記録される",
+    "cmd": "python scripts/excel_edit.py enforce {fx}/bom2.xlsx {fx}/out.xlsx",
+    "exit": 0,
+    "contains": [
+      "範囲外の変更なし"
+    ]
+  },
+  {
     "name": "slinky-フィラー除去",
     "cmd": "python scripts/transcribe.py {fx}/raw.txt --clean-only --out {fx}/clean.txt",
     "exit": 0,

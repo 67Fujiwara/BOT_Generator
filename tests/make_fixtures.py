@@ -39,7 +39,7 @@ def write_pdf(path: Path, pages: list[list[tuple[int, int, str]]]):
 
 def main():
     OUT.mkdir(exist_ok=True)
-    for stale in ("kizuki.json", "tasks.json"):      # 前回のケースが残した保存ファイルは消す（id が 1 から始まる前提）
+    for stale in ("kizuki.json", "tasks.json", "edit_log.jsonl"):      # 前回のケースが残した保存ファイルは消す（id が 1 から始まる前提）
         (OUT / stale).unlink(missing_ok=True)
     shutil.rmtree(OUT / "drawing_画像", ignore_errors=True)
     (OUT / "memo.md").write_text("# 定例会議 議事録\n\n- 決定事項: 盤図の改訂は来週後半\n- ToDo: 端子台の型式を確認\n\n| 項目 | 担当 |\n|---|---|\n| 見積 | 藤原 |\n", encoding="utf-8")
@@ -69,6 +69,9 @@ def main():
                                         ("G2R-1-SN", "リレー", "OMRON", 10)], 1):
         ws.append([i, m, n, mk, q, ""])
     wb.save(OUT / "bom2.xlsx")
+    ws["C3"] = "編集済"                    # excel_edit enforce 用: C3 は頼まれた所、F5 は頼まれていない所
+    ws["F5"] = "余計"
+    wb.save(OUT / "bom2_dirty.xlsx")
     wb = openpyxl.Workbook(); ws = wb.active
     ws.append(["", "", "", "A商社", "B商社", "C商社"]); ws.append(["品番", "品名", "数量", "単価", "単価", "単価"])
     for row in [["kv8000", "PLC", 1, 150000, 148000, 151000], ["KV-N24AR", "拡張", 2, 30000, 29500, None],

@@ -15,6 +15,7 @@ apply: 書いた順に変えて保存し（--out なら別名、無ければ上�
 enforce: 控えと比べて、--since 以降に apply が記録したセルと --allow のセル以外の変更を控えに戻す（サーバーが返事の後に使う）。
   シートが消えた・名前が変わった・記録のないシートが増えたときは、ファイルを丸ごと控えに戻す。
   図・グラフ・画像が減ったのは戻せない（openpyxl では残せない）ので、注意として出すだけ。
+記録先は環境変数 BOT_EDIT_LOG で変えられる（テスト用）。
 終了コード: apply 変えた 0 / 参照が変・読めない・変えるものがない 2
            enforce 範囲外の変更なし 0 / 戻した 1 / 読めない 2
 """
@@ -41,7 +42,7 @@ from openpyxl.utils.exceptions import CellCoordinatesException
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import excel_diff  # noqa: E402
 
-LOG = Path(__file__).resolve().parent.parent / "app" / "edit_log.jsonl"
+LOG = Path(os.environ.get("BOT_EDIT_LOG") or Path(__file__).resolve().parent.parent / "app" / "edit_log.jsonl")
 CSV_SHEET = "(csv)"                       # excel_diff が CSV に付けるシート名
 MAX_ROW, MAX_COL = 1_048_576, 16_384
 SPANS = {"insert_rows": "row", "delete_rows": "row", "insert_cols": "col", "delete_cols": "col"}  # openpyxl のメソッド名

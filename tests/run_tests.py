@@ -17,7 +17,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-ENV = {**os.environ, "PYTHONUTF8": "1"}   # 子の出力を UTF-8 に揃える（日本語版 Windows の既定は cp932）
+ENV = {**os.environ, "PYTHONUTF8": "1",   # 子の出力を UTF-8 に揃える（日本語版 Windows の既定は cp932）
+       "BOT_EDIT_LOG": str(HERE / "fixtures" / "edit_log.jsonl")}   # 前回の記録で excel_edit のケースが通らないように
 
 
 def main():
