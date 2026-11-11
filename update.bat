@@ -14,7 +14,7 @@ git checkout -- . >nul 2>&1
 git pull
 if errorlevel 1 (
   echo.
-  echo git pull failed (offline?). Starting the current version as is.
+  echo git pull failed ^(offline?^). Starting the current version as is.
   call run.bat
   timeout /t 8 >nul
   exit /b 0
