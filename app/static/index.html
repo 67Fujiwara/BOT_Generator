@@ -172,16 +172,22 @@ body.drag .drop-pill{display:flex}
 @keyframes dropPulse{0%,100%{border-color:var(--accent);opacity:.9}50%{border-color:color-mix(in srgb,var(--accent) 45%,transparent);opacity:1}}
 @media (prefers-reduced-motion:reduce){ body.drag::after{animation:none} }
 /* ── 設定ダイアログ ── */
-dialog.settings{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:22px 24px;width:min(460px,92vw);max-height:92vh;overflow:auto;font:inherit}
+dialog.settings{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px 22px 14px;width:min(560px,94vw);max-height:92vh;overflow:auto;font:inherit}
 dialog.settings::backdrop{background:rgba(0,0,0,.35)}
-dialog.settings h2{font-size:16px;margin:0 0 6px}
+dialog.settings h2{font-size:16px;margin:0}
+.set-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px} .set-x{border:0 !important;background:none !important;font-size:20px !important;line-height:1;padding:2px 8px !important;color:var(--muted) !important} .set-x:hover{color:var(--ink) !important} .set-x:focus{outline:none}
+.stabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 6px} .stabs button{border:0 !important;background:none !important;border-radius:8px 8px 0 0 !important;padding:8px 12px !important;color:var(--muted) !important;font-size:13px !important;margin-bottom:-1px} .stabs button[aria-selected="true"]{color:var(--ink) !important;border-bottom:2px solid var(--accent) !important}
+.spane{padding:4px 0 2px} .set-row{margin-top:14px} .set-row .btns{margin-top:8px} .help{font-size:12px;color:var(--muted);margin:5px 0 0;line-height:1.5}
+.inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px} .inline .num{width:4.5em !important;margin-top:0 !important;text-align:center} .inline .chk{display:flex;align-items:center;gap:5px;margin:0;color:var(--ink);font-size:13px} .inline .chk input{width:auto;margin:0}
+.set-group{border:1px solid var(--line);border-radius:10px;padding:2px 12px 12px;margin-top:14px} .set-group legend{font-size:12px;color:var(--muted);padding:0 4px} .set-group .set-row:first-of-type{margin-top:6px}
+.set-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);font-family:var(--mono)}
 dialog.settings p{margin:6px 0;font-size:13px;color:var(--muted)}
-dialog.settings label{display:block;font-size:12px;color:var(--muted);margin-top:14px}
+dialog.settings label{display:block;font-size:12.5px;color:var(--ink);font-weight:600;margin-top:0}
 dialog.settings input,dialog.settings .set-field{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px var(--mono);background:var(--bg);color:var(--ink);margin-top:4px}
 dialog.settings .set-field{font:inherit;font-size:13px}
 dialog.settings details summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:14px}
 dialog.settings a{color:var(--accent)}
-dialog.settings .btns{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+dialog.settings .btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 dialog.settings .btns .spacer{flex:1}
 dialog.settings button{font:inherit;font-size:13px;border-radius:8px;padding:7px 14px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)}
 dialog.settings button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -251,83 +257,78 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
 </aside>
 
 <dialog class="settings" id="settings">
-  <h2>設定</h2>
-  <p id="setCurrent">読み込み中…</p>
-  <label for="themeSel">テーマ</label>
-  <select id="themeSel" class="set-field">
-    <option value="auto">OS に合わせる</option>
-    <option value="light">ライト</option>
-    <option value="dark">ダーク</option>
-  </select>
-  <label for="notifySec">返事のポップアップ <span style="font-weight:400">（この秒数以上かかった返事を知らせる。別タブ・別アプリを見ている間は秒数に関係なく知らせる）</span></label>
-  <select id="notifySec" class="set-field">
-    <option value="0">いつも（即答でも）</option>
-    <option value="3">3 秒以上</option>
-    <option value="10">10 秒以上</option>
-    <option value="20">20 秒以上</option>
-    <option value="60">1 分以上</option>
-    <option value="-1">画面を見ていない時だけ</option>
-  </select>
-  <label for="andyEvery">アンディの「気づき、何かある？」 <span style="font-weight:400">（この間隔で右下に聞きに来る。MC のタネを集める用）</span></label>
-  <select id="andyEvery" class="set-field">
-    <option value="0">聞きに来ない</option>
-    <option value="30">30 分ごと</option>
-    <option value="60">1 時間ごと</option>
-    <option value="120">2 時間ごと</option>
-    <option value="180">3 時間ごと</option>
-    <option value="240">4 時間ごと</option>
-    <option value="300">5 時間ごと</option>
-    <option value="360">6 時間ごと</option>
-    <option value="480">8 時間ごと</option>
-    <option value="1440">1 日 1 回</option>
-  </select>
-  <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:4px;flex-wrap:wrap"><input type="checkbox" id="andyWork"> 平日だけ、<input id="andyH0" type="number" min="0" max="23" style="width:4em" class="set-field"> 〜 <input id="andyH1" type="number" min="1" max="24" style="width:4em" class="set-field"> 時の間だけ <span style="color:var(--muted)">（チャットで「アンディ、5 時間ごとにして」でも変えられる。全員で同じ設定）</span></label>
-  <label for="sendKey">送信キー</label>
-  <select id="sendKey" class="set-field">
-    <option value="enter">Enter で送信（Shift+Enter で改行）</option>
-    <option value="ctrl">Ctrl+Enter で送信（Enter で改行）</option>
-  </select>
-  <label for="apiKey">Anthropic API キー</label>
-  <input id="apiKey" type="password" placeholder="sk-ant-api03-…" autocomplete="off" spellcheck="false">
-  <p>キーは <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a> の API Keys で作れます。保存先はこの PC の <span class="mono" id="setFile">app/config.json</span> で、git には入りません。</p>
-  <label for="openaiKey">文字起こし API キー（OpenAI、スリンキー用）<span id="openaiCurrent" style="margin-left:8px"></span></label>
-  <div style="display:flex;gap:6px;align-items:center">
-    <input id="openaiKey" type="password" placeholder="sk-…（platform.openai.com の API keys）" autocomplete="off" spellcheck="false" style="flex:1">
-    <button type="button" id="openaiSave" style="font:inherit;font-size:13px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)">保存</button>
-    <button type="button" id="openaiClear" style="font:inherit;font-size:13px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:none;color:var(--ink)">削除</button>
-  </div>
-  <details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">ライブ録音・文字起こしの設定（スリンキー）</summary>
-    <label for="trEngine">文字起こしエンジン</label>
-    <select id="trEngine" class="set-field">
-      <option value="auto">自動（外部サーバー → Cloudflare → OpenAI → ローカル Whisper の順で使えるもの）</option>
-      <option value="cloudflare">Cloudflare Workers AI の Whisper（無料枠あり・おすすめ）</option>
-      <option value="openai">OpenAI（上の文字起こしキー、有料）</option>
-      <option value="whisper">ローカル Whisper（faster-whisper、鍵不要）</option>
-      <option value="remote">外部サーバー（SYNAPSE の /api/minutes/transcribe など）</option>
-    </select>
-    <label for="cfAccount">Cloudflare アカウント ID <span style="font-weight:400">（dash.cloudflare.com → Workers & Pages の右側「Account ID」）</span></label>
-    <input id="cfAccount" type="text" placeholder="32桁の英数字" autocomplete="off" spellcheck="false">
-    <label for="cfToken">Cloudflare API トークン <span id="cfTokenCurrent" style="margin-left:8px"></span><span style="font-weight:400">（プロフィール → API Tokens → Create Token → テンプレート「Workers AI」）</span></label>
-    <input id="cfToken" type="password" placeholder="空で保存すると変更なし" autocomplete="off">
-    <label for="trUrl">外部サーバーの URL</label>
-    <input id="trUrl" type="text" placeholder="https://…/api/minutes/transcribe" autocomplete="off" spellcheck="false">
-    <label for="trToken">外部サーバーのトークン <span id="trTokenCurrent" style="margin-left:8px"></span></label>
-    <input id="trToken" type="password" placeholder="Bearer に入れる値（空で保存すると変更なし）" autocomplete="off">
-    <label for="trGlossary">用語（案件名・人名・製品名・社内用語。カンマ区切り。固有名詞の誤りが減ります）</label>
-    <textarea id="trGlossary" rows="2" class="set-field" placeholder="例: SYNAPSE, 藤原, 制御盤, FAT, 納期, KV-8000" style="resize:vertical"></textarea>
-    <label for="trChunk">区切りの長さ（秒、20〜90。既定 45）</label>
-    <input id="trChunk" type="number" min="20" max="90" value="45" style="width:120px">
-    <div class="btns" style="margin-top:10px"><span class="spacer"></span><button type="button" id="trSave">文字起こし設定を保存</button></div>
-  </details>
+  <div class="set-head"><h2>設定</h2><button type="button" class="set-x" id="setClose" title="閉じる">×</button></div>
+  <nav class="stabs" role="tablist">
+    <button type="button" role="tab" data-tab="general" aria-selected="true">一般</button>
+    <button type="button" role="tab" data-tab="notify" aria-selected="false">通知</button>
+    <button type="button" role="tab" data-tab="keys" aria-selected="false">API キー</button>
+    <button type="button" role="tab" data-tab="transcribe" aria-selected="false">文字起こし</button>
+  </nav>
+
+  <section class="spane" data-tab="general">
+    <div class="set-row"><label for="themeSel">テーマ</label>
+      <select id="themeSel" class="set-field"><option value="auto">OS に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select></div>
+    <div class="set-row"><label for="sendKey">送信キー</label>
+      <select id="sendKey" class="set-field"><option value="enter">Enter で送信（Shift+Enter で改行）</option><option value="ctrl">Ctrl+Enter で送信（Enter で改行）</option></select></div>
+    <p class="help">テーマと送信キーはこのブラウザだけの設定です。</p>
+  </section>
+
+  <section class="spane" data-tab="notify" hidden>
+    <div class="set-row"><label for="notifySec">返事のポップアップ</label>
+      <select id="notifySec" class="set-field">
+        <option value="0">いつも（即答でも）</option><option value="3">3 秒以上かかったとき</option><option value="10">10 秒以上かかったとき</option>
+        <option value="20">20 秒以上かかったとき</option><option value="60">1 分以上かかったとき</option><option value="-1">画面を見ていない時だけ</option>
+      </select>
+      <p class="help">別のタブやアプリを見ている間は、秒数に関係なく知らせます。</p></div>
+    <div class="set-row"><label for="andyEvery">Andy の「気づき、何かある？」</label>
+      <select id="andyEvery" class="set-field">
+        <option value="0">聞きに来ない</option><option value="30">30 分ごと</option><option value="60">1 時間ごと</option><option value="120">2 時間ごと</option>
+        <option value="180">3 時間ごと</option><option value="240">4 時間ごと</option><option value="300">5 時間ごと</option><option value="360">6 時間ごと</option>
+        <option value="480">8 時間ごと</option><option value="1440">1 日 1 回</option>
+      </select>
+      <div class="inline"><label class="chk"><input type="checkbox" id="andyWork"> 平日だけ</label><span>時間帯</span><input id="andyH0" type="number" min="0" max="23" class="set-field num"><span>〜</span><input id="andyH1" type="number" min="1" max="24" class="set-field num"><span>時</span></div>
+      <p class="help">MC のタネを集めるための声かけ。チャットで「アンディ、5 時間ごとにして」と言っても変わります（この PC の全員で同じ設定）。</p></div>
+  </section>
+
+  <section class="spane" data-tab="keys" hidden>
+    <div class="set-row"><label for="apiKey">Anthropic API キー（全ボット）</label>
+      <p id="setCurrent" class="help" style="margin:2px 0 6px">読み込み中…</p>
+      <input id="apiKey" type="password" placeholder="sk-ant-api03-…" autocomplete="off" spellcheck="false">
+      <div class="btns"><button type="button" class="primary" id="setSave">保存</button><button type="button" id="setTest">接続テスト</button><button type="button" id="setClear">削除</button></div>
+      <p class="help">キーは <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a> の API Keys で作れます。保存先はこの PC の <span class="mono" id="setFile">app/config.json</span> で、git には入りません。</p></div>
+    <div class="set-row"><label for="openaiKey">OpenAI API キー（Slinky の文字起こしを OpenAI にする場合だけ）<span id="openaiCurrent" style="margin-left:8px"></span></label>
+      <input id="openaiKey" type="password" placeholder="sk-…（platform.openai.com の API keys）" autocomplete="off" spellcheck="false">
+      <div class="btns"><button type="button" id="openaiSave">保存</button><button type="button" id="openaiClear">削除</button></div></div>
+  </section>
+
+  <section class="spane" data-tab="transcribe" hidden>
+    <div class="set-row"><label for="trEngine">文字起こしエンジン（Slinky）</label>
+      <select id="trEngine" class="set-field">
+        <option value="auto">自動（外部サーバー → Cloudflare → OpenAI → ローカル Whisper の順）</option>
+        <option value="cloudflare">Cloudflare Workers AI の Whisper（無料枠あり・おすすめ）</option>
+        <option value="openai">OpenAI（「API キー」タブの OpenAI キー、有料）</option>
+        <option value="whisper">ローカル Whisper（faster-whisper、鍵不要）</option>
+        <option value="remote">外部サーバー（SYNAPSE の /api/minutes/transcribe など）</option>
+      </select></div>
+    <fieldset class="set-group"><legend>Cloudflare</legend>
+      <div class="set-row"><label for="cfAccount">アカウント ID</label><input id="cfAccount" type="text" placeholder="32桁の英数字" autocomplete="off" spellcheck="false">
+        <p class="help">dash.cloudflare.com → Workers &amp; Pages の右側「Account ID」。</p></div>
+      <div class="set-row"><label for="cfToken">API トークン <span id="cfTokenCurrent" style="margin-left:8px"></span></label><input id="cfToken" type="password" placeholder="空で保存すると変更なし" autocomplete="off">
+        <p class="help">プロフィール → API Tokens → Create Token → テンプレート「Workers AI」。</p></div>
+    </fieldset>
+    <fieldset class="set-group"><legend>外部サーバー</legend>
+      <div class="set-row"><label for="trUrl">URL</label><input id="trUrl" type="text" placeholder="https://…/api/minutes/transcribe" autocomplete="off" spellcheck="false"></div>
+      <div class="set-row"><label for="trToken">トークン <span id="trTokenCurrent" style="margin-left:8px"></span></label><input id="trToken" type="password" placeholder="Bearer に入れる値（空で保存すると変更なし）" autocomplete="off"></div>
+    </fieldset>
+    <div class="set-row"><label for="trGlossary">用語</label>
+      <textarea id="trGlossary" rows="2" class="set-field" placeholder="例: SYNAPSE, 藤原, 制御盤, FAT, 納期, KV-8000" style="resize:vertical"></textarea>
+      <p class="help">案件名・人名・製品名・社内用語をカンマ区切りで。固有名詞の誤りが減ります。</p></div>
+    <div class="set-row"><label for="trChunk">区切りの長さ（秒）</label><input id="trChunk" type="number" min="20" max="90" value="45" class="set-field num"><p class="help">20〜90。既定 45。</p></div>
+    <div class="btns"><button type="button" class="primary" id="trSave">文字起こし設定を保存</button></div>
+  </section>
+
   <div class="set-status" id="setStatus"></div>
-  <div id="setVersion" style="font-size:11px;color:var(--muted);margin-top:6px;font-family:var(--mono)"></div>
-  <div class="btns">
-    <button type="button" id="setTest">接続テスト</button>
-    <button type="button" id="setClear">キーを削除</button>
-    <span class="spacer"></span>
-    <button type="button" id="setClose">閉じる</button>
-    <button type="button" class="primary" id="setSave">保存</button>
-  </div>
+  <div class="set-foot"><span id="setVersion"></span></div>
 </dialog>
 
 <script>
@@ -959,7 +960,10 @@ $('#openaiClear').onclick=async()=>{
   const fd=new FormData(); fd.append('openai_api_key','');
   await fetch('/settings',{method:'POST',body:fd}); await loadSettings(); showSet('文字起こしキーを削除しました。','ok');
 };
-function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); dlg.showModal(); apiKey.focus();
+/* 設定のタブ。最後に開いたタブを覚える。認証エラーで開いたときは「API キー」 */
+function setTab(name){ document.querySelectorAll('.stabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name))); document.querySelectorAll('.spane').forEach(p=>p.hidden=p.dataset.tab!==name); try{ localStorage.setItem('setTab',name); }catch(e){} }
+document.querySelectorAll('.stabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); let tab='general'; try{ tab=localStorage.getItem('setTab')||'general'; }catch(e){} setTab(msg?'keys':tab); dlg.showModal(); if(msg) apiKey.focus();
   fetch('/version').then(r=>r.json()).then(v=>{ $('#setVersion').textContent=`版: ${v.version}　フォルダ: ${v.folder}`; }).catch(()=>{}); }
 $('#settingsBtn').onclick=()=>openSettings();
 $('#powerBtn').onclick=async()=>{
@@ -986,7 +990,7 @@ $('#setTest').onclick=async()=>{
   }catch(e){ showSet('サーバーに届きません。','ng'); }
   btn.disabled=false;
 };
-loadSettings().then(st=>{ let seen=false; try{seen=!!localStorage.getItem('settingsSeen');}catch(e){} if(!st.api_key_set&&!st.env_key_set&&!seen) openSettings(); });
+loadSettings().then(st=>{ let seen=false; try{seen=!!localStorage.getItem('settingsSeen');}catch(e){} if(!st.api_key_set&&!st.env_key_set&&!seen){ openSettings(); setTab('keys'); } });
 document.querySelectorAll('.tabs button').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true');
   ['detail','log','files','tasks','memory','kizuki'].forEach(p=>$('#pane-'+p).hidden=(p!==t.dataset.pane)); if(t.dataset.pane==='files') refreshFiles(); if(t.dataset.pane==='tasks') loadTasks(); if(t.dataset.pane==='memory') renderMemory(current); if(t.dataset.pane==='kizuki') loadKizuki();
