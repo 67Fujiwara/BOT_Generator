@@ -19,6 +19,7 @@ import openpyxl
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import excel_edit  # noqa: E402
 from extract_items import COL_GUESS, norm_key, to_num  # noqa: E402
 
 VENDOR_HINT = ("商社", "社", "見積", "単価", "price", "quote", "vendor", "supplier")
@@ -173,6 +174,7 @@ def main():
 
     out = a.out or str(Path(a.bom).with_name(Path(a.bom).stem + "_見積.xlsx"))
     wb.save(out)
+    excel_edit.record(out, a.bom)
     print(f"OK: 商社 {len(order)} 社 {order}  転記 {filled} 行 / BOM {filled + len(missing)} 行  → {out}")
     print(f"列対応: BOM型式={ws.cell(hr, kc).value}  スコア型式={info['key_col']}  商社={info['vendors']}")
     if missing:
