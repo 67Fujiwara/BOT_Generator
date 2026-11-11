@@ -17,3 +17,4 @@ app/kizuki.json
 app/checks.json
 app/memory/
 app/snapshots/
+app/edit_log.jsonl
