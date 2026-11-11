@@ -9,6 +9,9 @@
   python scripts/kizuki.py undo <id>               # 未着手に戻す
   python scripts/kizuki.py note <id> "<補足>"
   python scripts/kizuki.py remove <id>
+  python scripts/kizuki.py schedule --every "5時間"        # 「気づき、何かある？」の間隔（30分 / 2時間 / 1日1回 / なし）
+  python scripts/kizuki.py schedule --hours 8-19 --weekdays on   # 声をかける時間帯（平日だけ / 終日は --weekdays off --hours 0-24）
+  python scripts/kizuki.py schedule --show
 保存先は app/kizuki.json（git 対象外）。--store か環境変数 BOT_KIZUKI_FILE で差し替えられる。
 """
 from __future__ import annotations
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +27,50 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 STORE = Path(os.environ.get("BOT_KIZUKI_FILE") or ROOT / "app" / "kizuki.json")
 STATUS = {"open": "未着手", "mc": "MC化", "skip": "見送り"}
+CONFIG = ROOT / "app" / "config.json"      # 声かけの間隔はここ（画面の ⚙ と同じ値。ブラウザが 1 分ごとに読む）
+EVERY_RE = re.compile(r"^\s*(?:(\d+(?:\.\d+)?)\s*(分|時間|h|m|min)?|(\d+)\s*日\s*(?:に)?\s*1\s*回|毎日|1日1回|(なし|止め|しない|off|0))\s*(?:ごと|毎|おき)?\s*$", re.I)
+
+
+def parse_every(text: str) -> int | None:
+    """「5時間」「30分」「1日1回」「なし」→ 分。解釈できなければ None。"""
+    t = (text or "").strip().replace("ｈ", "h").replace("ごとに", "ごと")
+    m = EVERY_RE.match(t)
+    if not m:
+        return None
+    if m.group(4):
+        return 0
+    if m.group(3) or "毎日" in t or "1日1回" in t:
+        return 24 * 60 * (int(m.group(3)) if m.group(3) else 1)
+    n = float(m.group(1))
+    unit = (m.group(2) or "").lower()
+    return int(round(n * 60)) if unit in ("時間", "h") or (unit == "" and n <= 12) else int(round(n))
+
+
+def load_schedule() -> dict:
+    try:
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
+    except (OSError, ValueError):
+        cfg = {}
+    return {"every": int(cfg.get("andy_every", 120)), "weekdays": bool(cfg.get("andy_weekdays", True)),
+            "hours": list(cfg.get("andy_hours", [8, 19]))}
+
+
+def save_schedule(sch: dict) -> None:
+    try:
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
+    except (OSError, ValueError):
+        cfg = {}
+    cfg.update({"andy_every": int(sch["every"]), "andy_weekdays": bool(sch["weekdays"]), "andy_hours": [int(sch["hours"][0]), int(sch["hours"][1])]})
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def fmt_schedule(sch: dict) -> str:
+    e = sch["every"]
+    every = "声かけなし" if e <= 0 else (f"{e // 1440} 日に 1 回" if e % 1440 == 0 else f"{e // 60} 時間ごと" if e % 60 == 0 else f"{e} 分ごと")
+    h0, h1 = sch["hours"]
+    when = ("平日" if sch["weekdays"] else "毎日") + ("" if (h0, h1) == (0, 24) else f"の {h0}〜{h1} 時")
+    return f"{every}（{when}）"
 
 
 def _load(store: Path = None) -> list[dict]:
@@ -66,9 +114,32 @@ def main(argv: list[str]) -> int:
     for name in ("skip", "undo", "remove"):
         sub.add_parser(name).add_argument("id", type=int)
     n = sub.add_parser("note"); n.add_argument("id", type=int); n.add_argument("text")
+    ev = sub.add_parser("every"); ev.add_argument("text")          # 間隔の言い方 → 分（確認用。保存しない）
+    sc = sub.add_parser("schedule"); sc.add_argument("--every", default=None); sc.add_argument("--hours", default=None)
+    sc.add_argument("--weekdays", default=None, choices=["on", "off"]); sc.add_argument("--show", action="store_true")
     args = ap.parse_args(argv)
     store = Path(args.store) if args.store else None
 
+    if args.cmd == "every":
+        v = parse_every(args.text)
+        print("解釈できません" if v is None else f"{v} 分"); return 0 if v is not None else 3
+    if args.cmd == "schedule":
+        sch = load_schedule()
+        if args.every is not None:
+            ev = parse_every(args.every)
+            if ev is None:
+                print(f"間隔「{args.every}」を解釈できません。30分 / 2時間 / 1日1回 / なし のように言ってください"); return 3
+            sch["every"] = ev
+        if args.hours:
+            m = re.fullmatch(r"\s*(\d{1,2})\s*[-〜~]\s*(\d{1,2})\s*", args.hours)
+            if not m or not (0 <= int(m.group(1)) < int(m.group(2)) <= 24):
+                print(f"時間帯「{args.hours}」は 8-19 のように書いてください（0〜24）"); return 3
+            sch["hours"] = [int(m.group(1)), int(m.group(2))]
+        if args.weekdays:
+            sch["weekdays"] = args.weekdays == "on"
+        if not args.show:
+            save_schedule(sch)
+        print(("今の設定: " if args.show else "設定した: ") + fmt_schedule(sch)); return 0
     if args.cmd == "add":
         if not args.text.strip():
             print("気づきの文が空です"); return 2

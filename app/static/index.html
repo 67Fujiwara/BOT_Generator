@@ -276,9 +276,12 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <option value="120">2 時間ごと</option>
     <option value="180">3 時間ごと</option>
     <option value="240">4 時間ごと</option>
-    <option value="480">1 日 1 回（8 時間ごと）</option>
+    <option value="300">5 時間ごと</option>
+    <option value="360">6 時間ごと</option>
+    <option value="480">8 時間ごと</option>
+    <option value="1440">1 日 1 回</option>
   </select>
-  <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:4px"><input type="checkbox" id="andyWork"> 平日の 8〜19 時だけ</label>
+  <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:4px;flex-wrap:wrap"><input type="checkbox" id="andyWork"> 平日だけ、<input id="andyH0" type="number" min="0" max="23" style="width:4em" class="set-field"> 〜 <input id="andyH1" type="number" min="1" max="24" style="width:4em" class="set-field"> 時の間だけ <span style="color:var(--muted)">（チャットで「アンディ、5 時間ごとにして」でも変えられる。全員で同じ設定）</span></label>
   <label for="sendKey">送信キー</label>
   <select id="sendKey" class="set-field">
     <option value="enter">Enter で送信（Shift+Enter で改行）</option>
@@ -630,16 +633,31 @@ async function startMC(it){
   input.value=`これ MC したい: [${it.id}] ${it.text}`; send();
 }
 /* 定期的な「気づき、何かある？」: 間隔は ⚙（分、0 で止める）。平日 8〜19 時だけに絞れる。最後に聞いた/書いた時刻はブラウザに記憶 */
-let andyEvery=120, andyWork=true; try{ const v=localStorage.getItem('andyEvery'); if(v!==null) andyEvery=parseInt(v,10); andyWork=localStorage.getItem('andyWork')!=='0'; }catch(e){}
-$('#andyEvery').value=String(andyEvery); $('#andyWork').checked=andyWork;
-$('#andyEvery').onchange=e=>{ andyEvery=parseInt(e.target.value,10); try{ localStorage.setItem('andyEvery',String(andyEvery)); }catch(e2){} andyTouch(); };
-$('#andyWork').onchange=e=>{ andyWork=e.target.checked; try{ localStorage.setItem('andyWork',andyWork?'1':'0'); }catch(e2){} };
+/* 間隔・時間帯はサーバー（app/config.json）に持つ。⚙ からも、チャットで「アンディ、5 時間ごとにして」（kizuki.py schedule）からも変わる。1 分ごとに読み直す */
+let andyEvery=120, andyWork=true, andyH0=8, andyH1=19;
+function showAndySchedule(){
+  const sel=$('#andyEvery'); if(![...sel.options].some(o=>o.value===String(andyEvery))){ const o=document.createElement('option'); o.value=String(andyEvery); o.textContent=andyEvery%60?`${andyEvery} 分ごと`:`${andyEvery/60} 時間ごと`; sel.appendChild(o); }
+  sel.value=String(andyEvery); $('#andyWork').checked=andyWork; $('#andyH0').value=andyH0; $('#andyH1').value=andyH1;
+}
+async function loadAndySchedule(){
+  try{ const d=await (await fetch('/reminder')).json(); const changed=d.every!==andyEvery; andyEvery=d.every; andyWork=d.weekdays; [andyH0,andyH1]=d.hours; showAndySchedule(); if(changed) andyTouch(); }catch(e){}
+}
+async function saveAndySchedule(){
+  const fd=new FormData(); fd.append('every',String(andyEvery)); fd.append('weekdays',andyWork?'true':'false'); fd.append('hours',`${andyH0}-${andyH1}`);
+  try{ await fetch('/reminder',{method:'POST',body:fd}); }catch(e){}
+  andyTouch();
+}
+$('#andyEvery').onchange=e=>{ andyEvery=parseInt(e.target.value,10); saveAndySchedule(); };
+$('#andyWork').onchange=e=>{ andyWork=e.target.checked; saveAndySchedule(); };
+$('#andyH0').onchange=e=>{ andyH0=Math.max(0,Math.min(23,parseInt(e.target.value,10)||0)); if(andyH1<=andyH0) andyH1=andyH0+1; saveAndySchedule(); showAndySchedule(); };
+$('#andyH1').onchange=e=>{ andyH1=Math.max(1,Math.min(24,parseInt(e.target.value,10)||24)); if(andyH1<=andyH0) andyH0=andyH1-1; saveAndySchedule(); showAndySchedule(); };
+loadAndySchedule(); setInterval(loadAndySchedule,60000);
 function andyTouch(){ try{ localStorage.setItem('andyLast',String(Date.now())); }catch(e){} }
 const ANDY_LINES=['気づき、何かある？ 小さいことでいいよ','今日、めんどくさかったことない？','「なんでこうなってるんだろう」って思ったこと、ある？','探し物・待ち・やり直し、どれかあった？','ひとつでいいから、気づいたこと聞かせて'];
 function checkAndy(){
   if(!(andyEvery>0)) return;
   const now=new Date();
-  if(andyWork){ const d=now.getDay(), h=now.getHours(); if(d===0||d===6||h<8||h>=19) return; }
+  { const d=now.getDay(), h=now.getHours(); if(andyWork&&(d===0||d===6)) return; if(h<andyH0||h>=andyH1) return; }
   let last=0; try{ last=parseInt(localStorage.getItem('andyLast')||'0',10)||0; }catch(e){}
   if(!last){ andyTouch(); return; }                 // 初回は今から数える（開いた瞬間に出さない）
   if(now-last<andyEvery*60e3) return;

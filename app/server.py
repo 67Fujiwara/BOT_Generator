@@ -459,6 +459,27 @@ def kizuki_action(item_id: int, action: str):
     return {"ok": True}
 
 
+@app.get("/reminder")
+def reminder_get():
+    """アンディの声かけの間隔・時間帯（app/config.json）。画面が 1 分ごとに読む。チャットからは kizuki.py schedule で変える"""
+    return kz.load_schedule()
+
+
+@app.post("/reminder")
+def reminder_set(every: int = Form(...), weekdays: bool = Form(True), hours: str = Form("8-19")):
+    sch = kz.load_schedule()
+    sch["every"] = max(0, int(every))
+    sch["weekdays"] = bool(weekdays)
+    try:
+        h0, h1 = [int(x) for x in hours.split("-")]
+        if 0 <= h0 < h1 <= 24:
+            sch["hours"] = [h0, h1]
+    except ValueError:
+        pass
+    kz.save_schedule(sch)
+    return {"ok": True, "schedule": sch, "text": kz.fmt_schedule(sch)}
+
+
 @app.get("/version")
 def version():
     return {"stamp": CODE_STAMP, "version": VERSION, "folder": str(ROOT)}

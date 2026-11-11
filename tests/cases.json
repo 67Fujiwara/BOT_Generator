@@ -433,5 +433,29 @@
       "(cid:",
       "〓"
     ]
+  },
+  {
+    "name": "kizuki-間隔の言い方",
+    "cmd": "python scripts/kizuki.py every 5時間",
+    "exit": 0,
+    "contains": [
+      "300 分"
+    ]
+  },
+  {
+    "name": "kizuki-間隔の言い方（1日1回）",
+    "cmd": "python scripts/kizuki.py every 1日1回",
+    "exit": 0,
+    "contains": [
+      "1440 分"
+    ]
+  },
+  {
+    "name": "kizuki-間隔が読めない",
+    "cmd": "python scripts/kizuki.py every ほげ",
+    "exit": 3,
+    "contains": [
+      "解釈できません"
+    ]
   }
 ]
