@@ -190,10 +190,10 @@ def record(out_path, before_path) -> dict:
     return d
 
 
-def load_scope(file, since: float = 0) -> Scope:
-    """file について since 以降に記録されたセルとシート。"""
+def load_scope(file, since: float = 0, source=None) -> Scope:
+    """file について since 以降に記録されたセルとシート。source（file を作った元）で記録したものも含める。"""
     scope: Scope = {}
-    key = _key(file)
+    keys = {_key(file)} | ({_key(source)} if source else set())
     try:
         text = LOG.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -203,7 +203,7 @@ def load_scope(file, since: float = 0) -> Scope:
             e = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if e.get("file") != key or e.get("at", 0) < since:
+        if e.get("file") not in keys or e.get("at", 0) < since:
             continue
         for s, cells in e.get("cells", {}).items():
             scope.setdefault(s, set()).update(cells)

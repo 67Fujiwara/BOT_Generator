@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent      # bot-team/
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import excel_diff      # noqa: E402
+import excel_edit      # noqa: E402
 import kizuki as kz    # noqa: E402
 import memory as mem   # noqa: E402
 import relay           # noqa: E402
@@ -739,31 +740,45 @@ def _snapshot_sheets(bot_id: str, text: str) -> list[dict]:
     return snaps
 
 
-def _sheet_changes(snaps: list[dict], since: float) -> list[tuple[str, list[str]]]:
-    """(ファイル, 前の版との差の行)。控えたファイルが変わったものと、控えたファイルを元に作った新しいファイル
-    （<元名>_見積.xlsx のように名前が元の名前で始まる）を、セル単位で比べる。"""
-    pairs = [(_rel(s["path"]), s["copy"], s["path"]) for s in snaps
+def _sheet_changes(snaps: list[dict], since: float) -> list[tuple[str, list[str], list[str]]]:
+    """(ファイル, 前の版との差の行, 控えに戻した行)。控えたファイルが変わったものと、控えたファイルを元に作った新しいファイル
+    （<元名>_見積.xlsx のように名前が元の名前で始まる）を、セル単位で比べる。
+    since 以降に excel_edit.py が記録していないセルの変更は、比べる前に控えに戻す（新しいファイルは元で記録したセルも認める）。"""
+    pairs = [(_rel(s["path"]), s["copy"], s["path"], None) for s in snaps
              if s["path"].exists() and s["path"].stat().st_mtime_ns != s["mtime"]]
     for rel in _changed_files(since):
         p = ROOT / rel
-        if p.suffix.lower() not in SHEET_EXT or any(s["path"] == p for s in snaps):
+        # .normalized.csv はポテトの比較用の書き出しで、元の表を直したものではない
+        if p.suffix.lower() not in SHEET_EXT or p.name.endswith(".normalized.csv") or any(s["path"] == p for s in snaps):
             continue
         base = next((s for s in snaps if p.stem.startswith(s["path"].stem) and p.suffix.lower() == s["path"].suffix.lower()), None)
         if base:
-            pairs.append((f"{rel}（元: {base['path'].name}）", base["copy"], p))
+            pairs.append((f"{rel}（元: {base['path'].name}）", base["copy"], p, base["path"]))
     out = []
-    for label, before, after in pairs:
+    for label, before, after, source in pairs:
+        back: list[str] = []
         try:
-            lines = excel_diff.summary(excel_diff.diff(before, after), max_cells=12) or ["変更なし"]
+            d = excel_diff.diff(before, after)
+            back = excel_edit.enforce(before, after, excel_edit.load_scope(after, since, source), d)
+            if back:
+                d = excel_diff.diff(before, after)
+            lines = excel_diff.summary(d, max_cells=12) or ["変更なし"]
         except Exception as e:  # noqa: BLE001
             lines = [f"比べられなかった: {type(e).__name__}: {e}"]
-        out.append((label, lines))
+        out.append((label, lines, back))
     return out
 
 
-def _changes_block(changes: list[tuple[str, list[str]]]) -> str:
-    body = "\n\n".join(f"`{label}`\n```\n" + "\n".join(lines) + "\n```" for label, lines in changes)
-    return f"**変えたところ**（前の版とセル単位で比べた結果。前の版は `{_rel(SNAPSHOTS)}/` に控えてある）\n\n{body}"
+def _changes_block(changes: list[tuple[str, list[str], list[str]]]) -> str:
+    def fenced(rows):
+        return "\n\n".join(f"`{label}`\n```\n" + "\n".join(lines) + "\n```" for label, lines in rows)
+    block = (f"**変えたところ**（前の版とセル単位で比べた結果。前の版は `{_rel(SNAPSHOTS)}/` に控えてある）\n\n"
+             + fenced((label, lines) for label, lines, _ in changes))
+    back = [(label, b) for label, _, b in changes if b]
+    if back:
+        block += ("\n\n**戻したところ**（頼まれた所の外。excel_edit.py を通さずに変わっていたので控えに戻した）\n\n"
+                  + fenced(back))
+    return block
 
 
 def _match_checks(rel: str, patterns: list[str]) -> bool:
@@ -800,7 +815,9 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
     origin = origin or prompt
     snaps = _snapshot_sheets(bot_id, prompt) if (agent is None or agent["tools"]) else []
     if snaps:
-        prompt += ("\n\n触る前の控え（比べる用。編集しない。直したら `python scripts/excel_diff.py <控え> <ファイル>` で頼まれた所だけ変わったか確かめる）:\n"
+        prompt += ("\n\nExcel・CSV を変えるときは `python scripts/excel_edit.py apply <ファイル> --set \"シート!C5=値\" …`"
+                   "（別名で保存するなら `--out <別名>`）。excel_edit.py を通さずに変わったセルは、返事の後にサーバーが控えに戻す。\n"
+                   "触る前の控え（編集しない）:\n"
                    + "\n".join(f"- {_rel(s['path'])} → {_rel(s['copy'])}" for s in snaps))
 
     async def run(options):
@@ -910,7 +927,10 @@ async def _talk(bot_id: str, prompt: str, *, depth: int = 0, check_of: dict | No
             now = time.time()
             _history.setdefault(bot_id, []).append({"role": "relay", "from": me, "to": chk["nick"], "to_id": chk["id"],
                                                     "kind": "確認", "text": "、".join(hits[:6]), "at": now})
-            diff_text = "\n".join(f"{label}\n" + "\n".join(lines) for label, lines in changes)
+            diff_text = "\n".join(f"{label}\n" + "\n".join(lines) for label, lines, _ in changes)
+            back_text = "\n".join(f"{label}\n" + "\n".join(b) for label, _, b in changes if b)
+            if back_text:
+                diff_text += f"\n\n戻したところ（excel_edit.py を通さずに変わっていたので、サーバーが控えに戻した）:\n{back_text}"
             cprompt = _check_prompt(me, bot_id, hits, origin, "\n\n".join(reply), diff_text)
             _history.setdefault(chk["id"], []).append({"role": "me", "from": me, "text": cprompt, "at": now})
             answer = []
