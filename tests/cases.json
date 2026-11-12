@@ -267,7 +267,7 @@
     "cmd": "python scripts/tasks.py parse 今月中旬",
     "exit": 0,
     "contains": [
-      "-11\"",
+      "\"label\": \"今月中旬\"",
       "-20\""
     ]
   },
@@ -547,6 +547,79 @@
     "exit": 3,
     "contains": [
       "解釈できません"
+    ]
+  },
+  {
+    "name": "parts-サイトの追加と削除",
+    "cmd": "python scripts/parts.py --store {fx}/parts sites add テスト商店 https://example.com/s?q={q}",
+    "exit": 0,
+    "contains": [
+      "● テスト商店: https://example.com/s?q={q}",
+      "● ファーネル"
+    ]
+  },
+  {
+    "name": "parts-サイトを外す",
+    "cmd": "python scripts/parts.py --store {fx}/parts sites remove テスト商店",
+    "exit": 0,
+    "not_contains": [
+      "テスト商店"
+    ],
+    "contains": [
+      "MISUMI"
+    ]
+  },
+  {
+    "name": "parts-URLに{q}が無いと2",
+    "cmd": "python scripts/parts.py --store {fx}/parts sites add ダメ https://example.com/",
+    "exit": 2,
+    "contains": [
+      "{q}"
+    ]
+  },
+  {
+    "name": "parts-検索URLの組み立て",
+    "cmd": "python scripts/parts.py --store {fx}/parts price MY4N-D2 --dry-run",
+    "exit": 0,
+    "contains": [
+      "MY4N-D2",
+      "element14",
+      "monotaro"
+    ]
+  },
+  {
+    "name": "parts-相見積の価格",
+    "cmd": "python scripts/parts.py quotes KV-8000 XW2B-20G4 --score {fx}/score2.xlsx",
+    "exit": 0,
+    "contains": [
+      "KV-8000",
+      "A商社 ¥150,000",
+      "XW2B-20G4",
+      "B商社 ¥1,100"
+    ]
+  },
+  {
+    "name": "parts-スコア表",
+    "cmd": "python scripts/parts.py score {fx}/cands.json --out {fx}/alt.md --xlsx {fx}/alt.xlsx",
+    "exit": 0,
+    "contains": [
+      "第一候補",
+      "RJ2S-CL-D24",
+      "¥760（相見積）",
+      "第二候補",
+      "APF30224",
+      "不適合",
+      "XX-24",
+      "安さの罠",
+      "保存:"
+    ]
+  },
+  {
+    "name": "parts-学習",
+    "cmd": "python scripts/parts.py --store {fx}/parts xref add MY4N-D2 RJ2S-CL-D24 採用 --why 端子ピッチ同じ",
+    "exit": 0,
+    "contains": [
+      "覚えた: MY4N-D2 → RJ2S-CL-D24（採用：端子ピッチ同じ）"
     ]
   }
 ]

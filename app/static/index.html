@@ -180,6 +180,7 @@ dialog.settings h2{font-size:16px;margin:0}
 .spane{padding:4px 0 2px} .set-row{margin-top:14px} .set-row .btns{margin-top:8px} .help{font-size:12px;color:var(--muted);margin:5px 0 0;line-height:1.5}
 .inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px} .inline .num{width:4.5em !important;margin-top:0 !important;text-align:center} .inline .chk{display:flex;align-items:center;gap:5px;margin:0;color:var(--ink);font-size:13px} .inline .chk input{width:auto;margin:0}
 .set-group{border:1px solid var(--line);border-radius:10px;padding:2px 12px 12px;margin-top:14px} .set-group legend{font-size:12px;color:var(--muted);padding:0 4px} .set-group .set-row:first-of-type{margin-top:6px}
+.sitelist{list-style:none;padding:0;margin:6px 0 0} .sitelist li{display:grid;grid-template-columns:20px 7em 1fr auto;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px} .sitelist li .u{font:11.5px var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .sitelist li .u.none{color:var(--err)} .sitelist li input[type=checkbox]{width:auto;margin:0} .sitelist li .x{border:0 !important;background:none !important;color:var(--muted) !important;padding:0 6px !important;font-size:16px !important}
 .set-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);font-family:var(--mono)}
 dialog.settings p{margin:6px 0;font-size:13px;color:var(--muted)}
 dialog.settings label{display:block;font-size:12.5px;color:var(--ink);font-weight:600;margin-top:0}
@@ -263,6 +264,7 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <button type="button" role="tab" data-tab="notify" aria-selected="false">通知</button>
     <button type="button" role="tab" data-tab="keys" aria-selected="false">API キー</button>
     <button type="button" role="tab" data-tab="transcribe" aria-selected="false">文字起こし</button>
+    <button type="button" role="tab" data-tab="parts" aria-selected="false">部品</button>
   </nav>
 
   <section class="spane" data-tab="general">
@@ -327,6 +329,15 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
     <div class="btns"><button type="button" class="primary" id="trSave">文字起こし設定を保存</button></div>
   </section>
 
+  <section class="spane" data-tab="parts" hidden>
+    <div class="set-row"><label>Trixie が価格を探す EC サイト</label>
+      <p class="help">チェックを外すと検索しません。URL の <span class="mono">{q}</span> の所に型式が入ります（そのサイトで検索したときのアドレスをコピーして、型式の部分を {q} に置き換える）。</p>
+      <ul class="sitelist" id="sitelist"></ul>
+      <div class="inline" style="margin-top:8px"><input id="siteName" class="set-field" placeholder="名前" style="width:8em;margin-top:0"><input id="siteUrl" class="set-field" placeholder="https://…?q={q}" style="flex:1;min-width:12em;margin-top:0"><button type="button" id="siteAdd">追加</button></div>
+      <div class="btns"><button type="button" class="primary" id="sitesSave">サイト一覧を保存</button></div>
+      <p class="help">チャットで「トリクシー、〇〇も探して / 〇〇は外して」と言っても変えられます（`parts.py sites`）。</p></div>
+  </section>
+
   <div class="set-status" id="setStatus"></div>
   <div class="set-foot"><span id="setVersion"></span></div>
 </dialog>
@@ -371,6 +382,7 @@ const SHAPES={
   ham:   {d:'M22 44C14 36 14 24 20 22C26 20 32 26 34 28C44 22 60 22 70 28C74 24 82 20 86 24C90 30 86 38 82 42C92 56 90 78 76 88C64 94 40 94 28 86C18 80 14 70 16 60C8 58 6 48 12 46C14 44 18 44 22 44Z', ex:52, ey:46, dx:11, er:7},
   prospector:{d:'M2 36C2 30 16 29 30 30C30 10 70 10 70 30C84 29 98 30 98 36C98 41 86 42 76 41C78 52 78 60 76 66C86 72 88 84 82 94C72 98 60 96 50 97C40 96 28 98 18 94C12 84 14 72 24 66C22 60 22 52 24 41C14 42 2 41 2 36Z', ex:50, ey:52, dx:10, er:7},
   andy:  {d:'M34 30C30 14 42 6 50 12C58 4 72 10 68 26C74 24 80 28 76 34C84 42 84 58 78 70C72 84 60 92 50 92C40 92 28 84 22 70C16 58 16 42 24 34C20 28 26 24 34 30Z', ex:50, ey:52, dx:11, er:7.5},
+  trixie:{d:'M10 26C14 10 30 12 36 24C44 18 60 18 68 24C72 8 90 10 92 26C96 34 92 42 84 44C90 54 86 68 76 76C70 84 58 90 48 90C38 90 26 86 18 78C8 70 6 56 12 44C4 42 2 34 10 26ZM30 8C34 4 40 8 38 14C36 18 30 16 30 8ZM58 8C62 4 68 8 66 14C64 18 58 16 58 8Z', ex:48, ey:52, dx:12, er:7.5},
   rex:   {d:'M6 42C20 28 44 20 64 22C84 24 94 38 92 56C90 70 82 80 68 82C60 84 54 82 50 78C46 88 34 94 20 92C10 90 4 84 6 76C10 72 24 70 44 70C40 64 30 58 20 54C14 52 8 50 6 48C4 46 4 44 6 42Z', ex:68, ey:40, dx:8, er:6.5},
 };
 const botHead=b=>`<div class="bot-head">${avatar(b,'avatar')}<span>${esc(dn(b))}</span></div>`;
@@ -960,10 +972,24 @@ $('#openaiClear').onclick=async()=>{
   const fd=new FormData(); fd.append('openai_api_key','');
   await fetch('/settings',{method:'POST',body:fd}); await loadSettings(); showSet('文字起こしキーを削除しました。','ok');
 };
+/* ⚙「部品」: Trixie が探す EC サイトの一覧（サーバーの app/parts/sites.json） */
+let sitesCache=[];
+function renderSites(){
+  const ul=$('#sitelist'); ul.innerHTML='';
+  sitesCache.forEach((s,i)=>{ const li=document.createElement('li');
+    li.innerHTML=`<input type="checkbox" ${s.on?'checked':''} title="検索する"><span>${esc(s.name)}</span><span class="u ${s.url?'':'none'}" title="${esc(s.url||'')}">${esc(s.url||'URL 未設定'+(s.note?'（'+s.note+'）':''))}</span><button type="button" class="x" title="外す">×</button>`;
+    li.querySelector('input').onchange=e=>{ s.on=e.target.checked; };
+    li.querySelector('.x').onclick=()=>{ sitesCache.splice(i,1); renderSites(); };
+    ul.appendChild(li); });
+}
+async function loadSites(){ try{ sitesCache=(await (await fetch('/parts/sites')).json()).sites||[]; renderSites(); }catch(e){} }
+$('#siteAdd').onclick=()=>{ const n=$('#siteName').value.trim(), u=$('#siteUrl').value.trim(); if(!n) return; if(u&&!u.includes('{q}')){ showSet('URL に {q}（型式が入る所）を入れてください','ng'); return; }
+  const ex=sitesCache.find(s=>s.name===n); if(ex){ ex.url=u||ex.url; ex.on=true; } else sitesCache.push({name:n,url:u,on:!!u,note:''}); $('#siteName').value=''; $('#siteUrl').value=''; renderSites(); };
+$('#sitesSave').onclick=async()=>{ try{ const r=await (await fetch('/parts/sites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sites:sitesCache})})).json(); showSet(r.ok?'サイト一覧を保存しました':'保存できませんでした',r.ok?'ok':'ng'); }catch(e){ showSet('保存できませんでした','ng'); } };
 /* 設定のタブ。最後に開いたタブを覚える。認証エラーで開いたときは「API キー」 */
 function setTab(name){ document.querySelectorAll('.stabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name))); document.querySelectorAll('.spane').forEach(p=>p.hidden=p.dataset.tab!==name); try{ localStorage.setItem('setTab',name); }catch(e){} }
 document.querySelectorAll('.stabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
-function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); let tab='general'; try{ tab=localStorage.getItem('setTab')||'general'; }catch(e){} setTab(msg?'keys':tab); dlg.showModal(); if(msg) apiKey.focus();
+function openSettings(msg){ apiKey.value=''; showSet(msg||'', msg?'ng':''); loadSettings(); loadSites(); let tab='general'; try{ tab=localStorage.getItem('setTab')||'general'; }catch(e){} setTab(msg?'keys':tab); dlg.showModal(); if(msg) apiKey.focus();
   fetch('/version').then(r=>r.json()).then(v=>{ $('#setVersion').textContent=`版: ${v.version}　フォルダ: ${v.folder}`; }).catch(()=>{}); }
 $('#settingsBtn').onclick=()=>openSettings();
 $('#powerBtn').onclick=async()=>{

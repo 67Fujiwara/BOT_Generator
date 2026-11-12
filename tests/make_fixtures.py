@@ -1,4 +1,5 @@
 """検証用の入力ファイルを tests/fixtures/ に生成する（毎回同じ内容。git には入れない）。"""
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -42,6 +43,14 @@ def main():
     for stale in ("kizuki.json", "tasks.json", "edit_log.jsonl"):      # 前回のケースが残した保存ファイルは消す（id が 1 から始まる前提）
         (OUT / stale).unlink(missing_ok=True)
     shutil.rmtree(OUT / "drawing_画像", ignore_errors=True)
+    shutil.rmtree(OUT / "parts", ignore_errors=True)
+    (OUT / "cands.json").write_text(json.dumps({
+        "base": {"maker": "OMRON", "model": "MY4N-D2 DC24V", "price": 980, "qty": 10},
+        "candidates": [
+            {"maker": "IDEC", "model": "RJ2S-CL-D24", "price": 800, "quote": {"A商社": 760}, "stock": "在庫あり", "must_ok": True, "relaxed": False, "diffs": [], "traps": [], "source": "モノタロウ", "date": "2026-11-12"},
+            {"maker": "Panasonic", "model": "APF30224", "price": 650, "stock": "", "must_ok": True, "relaxed": True, "diffs": ["LEDなし"], "traps": ["マーケットプレイス出品（Amazon 以外の出品者）"], "source": "Amazon", "date": "2026-11-12"},
+            {"maker": "NoName", "model": "XX-24", "price": 300, "stock": "在庫あり", "must_ok": False, "relaxed": False, "diffs": ["接点構成が 2c"], "traps": ["相場より極端に安い（偽物・別物の疑い）"], "source": "Amazon", "date": "2026-11-12"}
+        ]}, ensure_ascii=False), encoding="utf-8")
     (OUT / "memo.md").write_text("# 定例会議 議事録\n\n- 決定事項: 盤図の改訂は来週後半\n- ToDo: 端子台の型式を確認\n\n| 項目 | 担当 |\n|---|---|\n| 見積 | 藤原 |\n", encoding="utf-8")
     try:                                   # Adobe-Japan1 の CID フォント（埋め込みなし）だけで書いた PDF。pdftext の読み取りテスト用
         from reportlab.pdfbase import pdfmetrics

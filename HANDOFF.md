@@ -30,6 +30,7 @@ Claude Code でこのリポジトリを開いたら、まずこのファイル�
 | ジェシー | jessie | タスク管理。文から仕事と納期を拾って `tasks.py` で登録、納期なしは聞き返す。右パネル「タスク」タブにチェックボックスで常設、期限で催促ポップアップ | Bash | 管理 |
 | バズ | buzz | 検証役。他ボットの成果物を自動チェック（`inspect_file.py`、判定タグ、NG は本人へフィードバック、繰り返しは「次から〜しないようにして」）＋ `tests/run_tests.py` を1回の Bash で回して PASS/FAIL。直さない | Bash, Read, Glob | 検証 |
 | アンディ | andy | 気づき（MC＝メソッドチェンジのタネ）を `kizuki.py` で貯め、「MC したい」で現状→原因→改善案→効果→MC シート草案まで 1 返事 1 テーマで一緒に考える。右パネル「気づき」タブ常設、⚙ で間隔を決めて「気づき、何かある？」のポップアップ | Bash, Read, Write | 改善 |
+| トリクシー | trixie | 代替品探し。資料を読んで必須/任意属性 → プロスペクター・レックス（・エイリアン）に聞く → `parts.py price` で EC サイト並列検索（JSON-LD → 本文の円表記、罠の印）→ `parts.py score` で最安値重みのスコア表（md + xlsx）。EC サイトは ⚙「部品」/ `parts.py sites`。学習は `parts.py xref` | Bash, Read, Glob, WebSearch, WebFetch | 購買・リスト |
 | プロスペクター | prospector | ソフト・PLC 歴 30 年のレジェンド。各社 PLC / HMI / サーボ / ネットワーク / 安全 / ロボットを全業界の現場経験で答える。設計相談・ラダー/ST レビュー・トラブル切り分け・機種選定・規格。知識で答え、確証が要るときだけ Web を 1〜2 回。右パネル「資料」「プログラム」の社内標準を優先 | Read, Glob, Bash, WebSearch, WebFetch | 制御 |
 | スリンキー | slinky | 録音/文字起こし → `transcribe.py`（文字起こし＋フィラー除去）→ 議事録 md（決定事項/ToDo/論点）。日時・参加者が不明なら1回聞く | Bash, Read, Glob, Write | 文章 |
 | ハム（旧ポーク） | ham | 走り書きの短文を意味を変えずに整える（既定は社内メール向け です・ます調。チャット/メール/報告書/英語を指定可）。model: haiku | なし | 文章 |
@@ -144,6 +145,10 @@ claude-agent-sdk は Claude Code からの 1 メッセージが 1MB を超える
 ## PDF の日本語（Adobe-Japan1）（2026-11-09）
 
 読み: `scripts/pdftext.py`（`page_texts` / `fix_cid` / `text_of`）。pdfminer の `(cid:N)` を `CMapDB.get_unicode_map('Adobe-Japan1')` で文字に直し、ダメなら pypdfium2。check_drawing（words の fix_cid、manual_text）と inspect_file が利用。書き: `scripts/make_pdf.py`（reportlab。TTF/TTC 埋め込み、無ければ UnicodeCIDFont HeiseiKakuGo-W5）。テストは make_pdf → pdftext の往復で日本語が戻ることを見る。Windows 実機のフォント検出（meiryo.ttc 等）は未検証。
+
+## トリクシー（2026-11-12）
+
+`scripts/parts.py`: sites / spec / price / quotes（fill_prices.read_score を再利用）/ score / xref。価格取得はこのクラウド環境では EC サイトが 403 で試せていない（Windows 実機で確認）。JSON-LD が無いサイトは本文の型式の近傍 400 文字の円表記を拾う粗い方式なので、上位候補はボットが WebFetch で裏取りする手順にしてある。MAX_HOPS を 4 に上げた（トリクシー → プロスペクター/レックス → 検証役の分）。
 
 ## 応答速度（2026-11-03 実測、同じ1文をハム（旧ポーク）に）
 

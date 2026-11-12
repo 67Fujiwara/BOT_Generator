@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -31,6 +31,7 @@ import excel_diff      # noqa: E402
 import excel_edit      # noqa: E402
 import kizuki as kz    # noqa: E402
 import memory as mem   # noqa: E402
+import parts as parts_mod   # noqa: E402
 import relay           # noqa: E402
 import tasks as tk     # noqa: E402
 
@@ -481,6 +482,25 @@ def reminder_set(every: int = Form(...), weekdays: bool = Form(True), hours: str
     return {"ok": True, "schedule": sch, "text": kz.fmt_schedule(sch)}
 
 
+@app.get("/parts/sites")
+def parts_sites_get():
+    """トリクシーが価格を探す EC サイトの一覧（app/parts/sites.json）。⚙ の「部品」タブで増減する"""
+    return {"sites": parts_mod.load_sites()}
+
+
+@app.post("/parts/sites")
+async def parts_sites_set(request: Request):
+    body = await request.json()
+    sites = []
+    for x in body.get("sites", []):
+        name, url = str(x.get("name", "")).strip(), str(x.get("url", "")).strip()
+        if not name:
+            continue
+        sites.append({"name": name, "url": url, "on": bool(x.get("on")), "note": str(x.get("note", ""))})
+    parts_mod.save_sites(sites)
+    return {"ok": True, "sites": sites}
+
+
 @app.get("/version")
 def version():
     return {"stamp": CODE_STAMP, "version": VERSION, "folder": str(ROOT)}
@@ -590,7 +610,7 @@ async def test_settings():
 
 
 _locks: dict[str, "asyncio.Lock"] = {}       # bot id → 同じボットへ同時に送らないための鍵
-MAX_HOPS = 3                                   # ボット間の連絡の深さの上限（無限の往復を防ぐ）
+MAX_HOPS = 4                                   # ボット間の連絡の深さの上限（無限の往復を防ぐ。トリクシーが仲間に聞いた後に検証役が入る分を含めて 4）
 MAX_MSG_BYTES = 64 * 1024 * 1024               # Claude Code から受ける 1 メッセージの上限。既定 1MB だと図面のページ画像や長い出力で落ちる
 
 

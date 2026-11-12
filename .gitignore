@@ -15,6 +15,7 @@ tests/fixtures/
 app/tasks.json
 app/kizuki.json
 app/checks.json
+app/parts/
 app/memory/
 app/snapshots/
 app/edit_log.jsonl
