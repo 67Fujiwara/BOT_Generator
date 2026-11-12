@@ -621,5 +621,25 @@
     "contains": [
       "覚えた: MY4N-D2 → RJ2S-CL-D24（採用：端子ピッチ同じ）"
     ]
+  },
+  {
+    "name": "parts-代替品一致モード",
+    "cmd": "python scripts/parts.py score {fx}/cands.json --mode match",
+    "exit": 0,
+    "contains": [
+      "代替品一致モード",
+      "0.2×最安値比 + 0.7×仕様一致",
+      "元品との一致に一番重み"
+    ]
+  },
+  {
+    "name": "parts-最安値モードが既定",
+    "cmd": "python scripts/parts.py score {fx}/cands.json",
+    "exit": 0,
+    "contains": [
+      "最安値モード",
+      "0.6×最安値比",
+      "安さに一番重み"
+    ]
   }
 ]

@@ -5,8 +5,8 @@
   spec  <PDF|URL|txt>...  [--out <txt>]          # データシートやページの本文を読む（PDF は日本語 CID 対応）
   price <型式> [--sites 名前,名前] [--json] [--dry-run]   # 登録サイトを並列で検索して価格を拾う（JSON-LD → 本文の近傍の円表記）
   quotes <型式>... [--score <xlsx>...]           # レックスの相見積（samples/rex/スコア）からその型式の商社価格を拾う
-  score <候補.json> [--out <md>] [--xlsx <xlsx>] [--w-price 0.6 --w-spec 0.3 --w-avail 0.1]
-                                                   # 最安値に一番重みを付けたスコアで並べ、第一候補/第二候補/不適合/罠 を表にする
+  score <候補.json> --mode cheapest|match [--out <md>] [--xlsx <xlsx>] [--w-price … --w-spec … --w-avail …]
+                                                   # cheapest = 最安値モード（価格 0.6 / 仕様 0.3 / 在庫 0.1）、match = 代替品一致モード（価格 0.2 / 仕様 0.7 / 在庫 0.1）
   xref add <元型式> <候補型式> <採用|不採用> [--why …] | xref list [<元型式>]   # 学習（次回から即答）
 保存先: app/parts/（sites.json / xref.json / cache/。git 対象外）。--store で差し替え可（テスト用）。
 """
@@ -277,7 +277,12 @@ def cmd_quotes(models: list[str], scores: list[str] | None) -> int:
 
 
 # ---------- score ----------
-def cmd_score(path: str, out: str | None, xlsx: str | None, wp: float, ws: float, wa: float) -> int:
+MODES = {"cheapest": ("最安値モード", 0.6, 0.3, 0.1), "match": ("代替品一致モード", 0.2, 0.7, 0.1)}
+
+
+def cmd_score(path: str, out: str | None, xlsx: str | None, mode: str, wp: float | None, ws: float | None, wa: float | None) -> int:
+    label, dp, ds, da = MODES[mode]
+    wp, ws, wa = (dp if wp is None else wp), (ds if ws is None else ws), (da if wa is None else wa)
     d = json.loads(Path(path).read_text(encoding="utf-8"))
     base, cands = d.get("base", {}), d.get("candidates", [])
     qty = float(base.get("qty") or 1)
@@ -307,8 +312,9 @@ def cmd_score(path: str, out: str | None, xlsx: str | None, wp: float, ws: float
         return (f"| {c.get('maker','')} | {c.get('model','')} | {price} | {save} | {c['_score']} | {c.get('stock','') or '—'} | "
                 f"{'、'.join(c.get('diffs') or []) or 'なし'} | {'⚠ ' + '、'.join(c['traps']) if c.get('traps') else '—'} | {c.get('source','')} {c.get('date','')} |")
     head = "| メーカー | 型式 | 価格（出どころ） | 削減額×数量 | スコア | 在庫・納期 | 元品との違い | 安さの罠 | 出典・日付 |\n|---|---|---|---|---|---|---|---|---|"
-    lines = [f"## 代替品: {base.get('model','')}（{base.get('maker','')}）", ""]
-    lines.append(f"元品: {('¥%s' % format(bp, ',.0f')) if bp else '価格不明'} × {qty:g} 個。スコア = 100×（{wp}×最安値比 + {ws}×仕様一致 + {wa}×在庫）− 20×罠の数。最安値に一番重み。")
+    lines = [f"## 代替品: {base.get('model','')}（{base.get('maker','')}）— {label}", ""]
+    lines.append(f"元品: {('¥%s' % format(bp, ',.0f')) if bp else '価格不明'} × {qty:g} 個。スコア = 100×（{wp}×最安値比 + {ws}×仕様一致 + {wa}×在庫）− 20×罠の数。"
+                 + ("安さに一番重み。" if wp >= ws else "元品との一致に一番重み（価格は二の次）。"))
     lines += ["", "### 第一候補（同等スペック）", head] + ([row(c) for c in first] or ["| — | 該当なし | | | | | | | |"])
     lines += ["", "### 第二候補（スペックを少し前後させた）", head] + ([row(c) for c in second] or ["| — | 該当なし | | | | | | | |"])
     if bad:
@@ -321,7 +327,7 @@ def cmd_score(path: str, out: str | None, xlsx: str | None, wp: float, ws: float
         Path(out).parent.mkdir(parents=True, exist_ok=True); Path(out).write_text(text, encoding="utf-8")
     if xlsx:
         import pandas as pd
-        rows = [{"区分": k, "メーカー": c.get("maker", ""), "型式": c.get("model", ""), "価格": c.get("_price"), "価格の出どころ": c.get("_price_from", ""),
+        rows = [{"モード": label, "区分": k, "メーカー": c.get("maker", ""), "型式": c.get("model", ""), "価格": c.get("_price"), "価格の出どころ": c.get("_price_from", ""),
                  "削減額×数量": ((bp - c["_price"]) * qty if (bp and c.get("_price")) else None), "スコア": c.get("_score"), "在庫・納期": c.get("stock", ""),
                  "元品との違い": "、".join(c.get("diffs") or []), "安さの罠": "、".join(c.get("traps") or []), "出典": c.get("source", ""), "URL": c.get("url", ""), "日付": c.get("date", "")}
                 for k, group in (("第一候補", first), ("第二候補", second), ("不適合", bad)) for c in group]
@@ -366,7 +372,8 @@ def main(argv: list[str]) -> int:
     pr = sub.add_parser("price"); pr.add_argument("model"); pr.add_argument("--sites", default=None); pr.add_argument("--json", action="store_true"); pr.add_argument("--dry-run", action="store_true")
     q = sub.add_parser("quotes"); q.add_argument("models", nargs="+"); q.add_argument("--score", nargs="*", default=None)
     sc = sub.add_parser("score"); sc.add_argument("path"); sc.add_argument("--out", default=None); sc.add_argument("--xlsx", default=None)
-    sc.add_argument("--w-price", type=float, default=0.6); sc.add_argument("--w-spec", type=float, default=0.3); sc.add_argument("--w-avail", type=float, default=0.1)
+    sc.add_argument("--mode", choices=list(MODES), default="cheapest")
+    sc.add_argument("--w-price", type=float, default=None); sc.add_argument("--w-spec", type=float, default=None); sc.add_argument("--w-avail", type=float, default=None)
     x = sub.add_parser("xref"); xs = x.add_subparsers(dest="xcmd", required=True)
     xa = xs.add_parser("add"); xa.add_argument("base"); xa.add_argument("alt"); xa.add_argument("verdict", choices=["採用", "不採用"]); xa.add_argument("--why", default="")
     xl = xs.add_parser("list"); xl.add_argument("base", nargs="?", default=None)
@@ -396,7 +403,7 @@ def main(argv: list[str]) -> int:
     if args.cmd == "quotes":
         return cmd_quotes(args.models, args.score)
     if args.cmd == "score":
-        return cmd_score(args.path, args.out, args.xlsx, args.w_price, args.w_spec, args.w_avail)
+        return cmd_score(args.path, args.out, args.xlsx, args.mode, args.w_price, args.w_spec, args.w_avail)
     return cmd_xref(args, store)
 
 
