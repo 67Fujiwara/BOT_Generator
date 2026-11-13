@@ -81,6 +81,13 @@ section.center{display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .bot-msg td,.bot-msg th{border:1px solid var(--line);padding:3px 10px;text-align:left}
 .bot-msg code{font:13px var(--mono);background:var(--code-bg);padding:1px 4px;border-radius:3px}
 .bot-msg pre{background:var(--code-bg);padding:10px;border-radius:8px;overflow-x:auto}
+/* コードブロック: よく見る配色（VS Code Dark+）。ライト / ダークどちらのテーマでも同じ暗い地 */
+.codewrap{margin:8px 0;border-radius:8px;overflow:hidden;background:#1e1e1e;border:1px solid #333}
+.codebar{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 4px 12px;background:#2d2d2d;color:#c5c5c5;font:11.5px var(--mono)}
+.codebar button{border:0;background:none;color:#c5c5c5;font:11.5px var(--sans,inherit);padding:3px 8px;border-radius:5px;cursor:pointer} .codebar button:hover{background:#3c3c3c;color:#fff}
+.bot-msg .codewrap pre{margin:0;background:#1e1e1e;color:#d4d4d4;padding:12px 14px;border-radius:0;font:13px/1.55 var(--mono);overflow-x:auto;tab-size:2}
+.bot-msg .codewrap pre code{background:none;padding:0;color:inherit;font:inherit;border-radius:0}
+.tk-k{color:#569cd6} .tk-s{color:#ce9178} .tk-c{color:#6a9955} .tk-n{color:#b5cea8} .tk-f{color:#dcdcaa} .tk-t{color:#4ec9b0} .tk-v{color:#9cdcfe}
 .bot-msg img{max-width:100%;max-height:320px;width:auto;height:auto;border:1px solid var(--line);border-radius:8px;margin:6px 0;display:block;cursor:zoom-in;background:#fff}
 .bot-msg img.zoom{position:fixed;inset:0;margin:auto;max-height:96vh;max-width:96vw;z-index:60;cursor:zoom-out;background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .meta{font-size:12px;color:var(--muted);align-self:flex-start;padding-left:4px}
@@ -351,7 +358,69 @@ let bots=[], current=AUTO, pending=[], busy=new Set(), resetNext=false;
 const dn=b=>(b&&(b.label||b.nick))||'';
 const byNick=n=>n==='ウッディ'?AUTO:(bots.find(x=>x.nick===n||x.label===n)||null);
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-const md=s=>window.marked?marked.parse(s,{breaks:true}):esc(s).replace(/\n/g,'<br>');
+/* ── コードの色分け（外部ライブラリなし）。言語は ```st / python / js / c / bash / il（命令リスト）/ json。無指定は中身から推定 ── */
+const HL_KW={
+  st:'IF THEN ELSE ELSIF END_IF CASE OF END_CASE FOR TO BY DO END_FOR WHILE END_WHILE REPEAT UNTIL END_REPEAT EXIT RETURN VAR VAR_INPUT VAR_OUTPUT VAR_IN_OUT VAR_TEMP VAR_GLOBAL VAR_EXTERNAL END_VAR CONSTANT RETAIN PROGRAM END_PROGRAM FUNCTION END_FUNCTION FUNCTION_BLOCK END_FUNCTION_BLOCK TYPE END_TYPE STRUCT END_STRUCT ARRAY AT AND OR XOR NOT MOD TRUE FALSE',
+  py:'def class return if elif else for while in not and or is None True False import from as with try except finally raise lambda yield pass break continue global nonlocal assert async await del',
+  js:'const let var function return if else for while do switch case break continue new class extends import from export default async await try catch finally throw typeof instanceof in of null undefined true false this super yield interface type enum implements public private readonly',
+  c:'int char float double void long short unsigned signed struct union enum typedef static const if else for while do switch case break continue return sizeof include define bool true false NULL nullptr class public private protected virtual override namespace using template new delete try catch throw string var foreach in out ref',
+  sh:'if then else elif fi for in do done while until case esac function return echo cd export set unset local exit rem goto call',
+  il:'LD LDI AND ANI OR ORI OUT SET RST MOV DMOV END NOP LDP LDF ANDP ANDF ORP ORF MC MCR CALL RET SRET FEND INC DEC ADD SUB MUL DIV CMP ZCP BMOV FMOV PLS PLF ANB ORB MPS MRD MPP INV EI DI FOR NEXT CJ ZRST BCD BIN',
+  json:'true false null', sql:'SELECT FROM WHERE AND OR NOT INSERT INTO VALUES UPDATE SET DELETE JOIN LEFT RIGHT INNER ON GROUP BY ORDER HAVING AS CREATE TABLE NULL LIMIT DISTINCT COUNT',
+};
+const HL_TYPES=new Set('BOOL BYTE WORD DWORD LWORD SINT INT DINT LINT USINT UINT UDINT ULINT REAL LREAL TIME DATE TOD DT STRING WSTRING TON TOF TP CTU CTD CTUD R_TRIG F_TRIG RS SR str int float bool list dict tuple set bytes number string boolean any void object Array Promise Map Set'.split(' '));
+const HL_ALIAS={st:'st',iecst:'st',scl:'st','structured-text':'st',structuredtext:'st',pascal:'st',python:'py',py:'py',javascript:'js',js:'js',ts:'js',typescript:'js',jsx:'js',tsx:'js',json:'json',
+  c:'c',cpp:'c','c++':'c',cs:'c',csharp:'c',java:'c',go:'c',rust:'c',bash:'sh',sh:'sh',shell:'sh',bat:'sh',cmd:'sh',powershell:'sh',ps1:'sh',il:'il',ladder:'il',mnemonic:'il',melsec:'il',gx:'il',kv:'il',sql:'sql'};
+const HL_LABEL={st:'ST',py:'Python',js:'JavaScript',c:'C 系',sh:'シェル',il:'命令リスト',json:'JSON',sql:'SQL','':'コード'};
+function hlGuess(code){
+  if(/\b(END_IF|END_VAR|END_FOR|FUNCTION_BLOCK)\b|:=/.test(code)) return 'st';
+  if(/^\s*(LD|LDI|MOV|OUT|SET|RST)\s+[A-Z]+\d/m.test(code)) return 'il';
+  if(/^\s*(def|import|from)\s|\bprint\(/m.test(code)) return 'py';
+  if(/\b(const|let|function)\s|=>/.test(code)) return 'js';
+  if(/^\s*[{\[][\s\S]*[}\]]\s*$/.test(code)&&/"\s*:/.test(code)) return 'json';
+  if(/^\s*(#include|int\s+main|public\s+class)/m.test(code)) return 'c';
+  if(/^\s*(\$ |cd |git |python |pip |echo )/m.test(code)) return 'sh';
+  return '';
+}
+function highlight(code,lang){
+  const ci=lang==='st'||lang==='il'||lang==='sql', kw=new Set((HL_KW[lang]||'').split(' ').filter(Boolean));
+  const hash=lang==='py'||lang==='sh', semi=lang==='il';
+  const re=new RegExp([
+    String.raw`(\(\*[\s\S]*?\*\)|\/\*[\s\S]*?\*\/|\/\/[^\n]*`+(hash?String.raw`|#[^\n]*`:'')+(semi?String.raw`|;[^\n]*`:'')+(lang==='sql'?String.raw`|--[^\n]*`:'')+')',     // 1 コメント
+    String.raw`("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`+'`(?:\\\\.|[^`\\\\])*`)',                                                              // 2 文字列
+    String.raw`\b(16#[0-9A-Fa-f_]+|2#[01_]+|8#[0-7_]+|T#[\w.]+|0x[0-9A-Fa-f]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b`,                                 // 3 数値
+    String.raw`([A-Za-z_][A-Za-z0-9_]*)`,                                                                                                          // 4 識別子
+  ].join('|'),'g');
+  let out='', last=0, m;
+  while((m=re.exec(code))){
+    out+=esc(code.slice(last,m.index)); last=re.lastIndex;
+    if(m[1]!==undefined) out+=`<span class="tk-c">${esc(m[1])}</span>`;
+    else if(m[2]!==undefined) out+=`<span class="tk-s">${esc(m[2])}</span>`;
+    else if(m[3]!==undefined) out+=`<span class="tk-n">${esc(m[3])}</span>`;
+    else { const w=m[4], k=ci?w.toUpperCase():w;
+      if(kw.has(k)) out+=`<span class="tk-k">${esc(w)}</span>`;
+      else if(HL_TYPES.has(w)||HL_TYPES.has(k)) out+=`<span class="tk-t">${esc(w)}</span>`;
+      else if(/^\s*\(/.test(code.slice(last,last+3))) out+=`<span class="tk-f">${esc(w)}</span>`;
+      else if(lang==='il'&&/^(?:[XYMLSBFDWRTCZ]|SM|SD|DM|MR|CR|LR|ZR|K|H)[0-9A-F]+$/i.test(w)) out+=`<span class="tk-v">${esc(w)}</span>`;
+      else if(lang==='json') out+=esc(w);
+      else out+=esc(w); }
+  }
+  return out+esc(code.slice(last));
+}
+function hlBlocks(html){
+  if(!html.includes('<pre')) return html;
+  const t=document.createElement('template'); t.innerHTML=html;
+  t.content.querySelectorAll('pre > code').forEach(code=>{
+    const cls=(code.className.match(/language-([\w+#-]+)/)||[])[1]||'', raw=code.textContent.replace(/\n$/,'');
+    const lang=HL_ALIAS[cls.toLowerCase()]??hlGuess(raw);
+    code.innerHTML=highlight(raw,lang);
+    const pre=code.parentElement, wrap=document.createElement('div'); wrap.className='codewrap';
+    wrap.innerHTML=`<div class="codebar"><span>${esc(HL_LABEL[lang]||cls||'コード')}</span><button type="button" class="codecopy">コピー</button></div>`;
+    pre.replaceWith(wrap); wrap.appendChild(pre);
+  });
+  return t.innerHTML;
+}
+const md=s=>window.marked?hlBlocks(marked.parse(s,{breaks:true})):esc(s).replace(/\n/g,'<br>');
 /* id からブロブの形を決める。点の数 3〜7（3 は丸い三角、4 は丸い四角…）を Catmull-Rom で滑らかに閉じる */
 const hash=id=>{ let h=2166136261; for(const ch of String(id)){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; };
 const rng=seed=>{ let t=seed>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; };
@@ -851,7 +920,14 @@ async function uploadSamples(b,label,files){
 }
 function fileChips(files){ return files&&files.length?`<div class="files">${files.map(f=>`<span>${esc(f)}</span>`).join('')}</div>`:''; }
 function append(cls,html){ log.querySelector('.empty')?.remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
-log.addEventListener('click',e=>{ if(e.target.tagName==='IMG') e.target.classList.toggle('zoom'); });
+log.addEventListener('click',async e=>{
+  if(e.target.tagName==='IMG') e.target.classList.toggle('zoom');
+  if(e.target.classList.contains('codecopy')){   // コードブロックの「コピー」: 色なしの素の文字だけ
+    const pre=e.target.closest('.codewrap')?.querySelector('pre'); if(!pre) return;
+    try{ await navigator.clipboard.writeText(pre.textContent); e.target.textContent='コピーしました'; }catch(err){ e.target.textContent='コピーできません'; }
+    setTimeout(()=>{ e.target.textContent='コピー'; },1500);
+  }
+});
 /* 作業中の表示を話し言葉に */
 function spoken(t){
   if(/に委譲$/.test(t)) return t.replace(/に委譲$/,'に頼んでる…');
@@ -1033,7 +1109,7 @@ document.addEventListener('copy',e=>{
   const t=e.target; if(t&&t.closest&&t.closest('input,textarea')) return;      // 入力欄は標準のまま
   const sel=document.getSelection(); if(!sel||sel.isCollapsed||!sel.rangeCount) return;
   const box=document.createElement('div'); box.appendChild(sel.getRangeAt(0).cloneContents());
-  box.querySelectorAll('svg,button,.bot-head,.relay .avatar').forEach(n=>n.remove());
+  box.querySelectorAll('svg,button,.bot-head,.relay .avatar,.codebar').forEach(n=>n.remove());
   box.querySelectorAll('*').forEach(n=>{ n.removeAttribute('style'); n.removeAttribute('class'); n.removeAttribute('id'); });
   e.clipboardData.setData('text/plain',sel.toString());
   e.clipboardData.setData('text/html',box.innerHTML);
