@@ -506,6 +506,26 @@ def version():
     return {"stamp": CODE_STAMP, "version": VERSION, "folder": str(ROOT)}
 
 
+@app.post("/open")
+def open_path(path: str = Form(...)):
+    """画面のフォルダ / ファイルのアイコンから呼ばれる。この PC のエクスプローラーで開く（Windows だけ）。
+    フォルダはそのまま開き、ファイルは「入っているフォルダを開いてそのファイルを選ぶ」だけ（実行はしない）。"""
+    p = Path(path.strip().strip('"'))
+    if sys.platform != "win32":
+        return {"ok": False, "error": "Windows の PC でだけ開けます"}
+    try:
+        if p.is_dir():
+            os.startfile(str(p))                      # noqa: S606  フォルダを開くだけ
+        elif p.exists():
+            import subprocess
+            subprocess.Popen(["explorer", "/select,", str(p)])
+        else:
+            return {"ok": False, "error": "見つかりません"}
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True}
+
+
 @app.post("/shutdown")
 def shutdown():
     """画面の ⏻ から呼ばれる。応答を返してからプロセスを終了する。"""
