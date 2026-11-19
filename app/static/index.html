@@ -462,7 +462,8 @@ function lkInfo(u){
 function lkChip(u,mode='icon',label=''){
   const i=lkInfo(u), a=x=>esc(x).replace(/"/g,'&quot;');
   const attrs=i.local?`href="#" data-open="${a(u)}"`:`href="${a(u)}" target="_blank" rel="noopener"`;
-  return `<a class="lk${mode==='icon'?' lk-icon':''}" ${attrs} title="${a(i.app+': '+u)}">${LK_ICON[i.icon]||LK_ICON.web}<span class="lkname">${esc(label||i.name)}</span></a>`;
+  // 絵だけ出す（後ろに文字は付けない）。名前・リンクの文字・全文はマウスを乗せたときの説明に入れる
+  return `<a class="lk lk-icon" ${attrs} title="${a((label?label+' — ':'')+i.app+': '+u)}" aria-label="${a(label||i.name)}">${LK_ICON[i.icon]||LK_ICON.web}</a>`;
 }
 /* パスは「"…"」で囲めば空白入りでも全部、囲まなくても途中のフォルダ名の半角空白 1 つまでは拾う（W:\01 設計\盤図）。最後の名前は空白で終わる */
 const LK_SEG=String.raw`(?:[^\s<>"'|?*\\]+(?: [^\s<>"'|?*\\]+)*\\)*[^\s<>"'|?*\\]*`;
