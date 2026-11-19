@@ -286,7 +286,10 @@ dialog.settings button:disabled{opacity:.5;cursor:default}
       <select id="themeSel" class="set-field"><option value="auto">OS に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select></div>
     <div class="set-row"><label for="sendKey">送信キー</label>
       <select id="sendKey" class="set-field"><option value="enter">Enter で送信（Shift+Enter で改行）</option><option value="ctrl">Ctrl+Enter で送信（Enter で改行）</option></select></div>
-    <p class="help">テーマと送信キーはこのブラウザだけの設定です。</p>
+    <div class="set-row"><label for="dcDriveIn">DirectCloud ドライブの文字</label>
+      <input id="dcDriveIn" class="set-field num" maxlength="1" placeholder="W" style="width:4.5em;text-transform:uppercase">
+      <p class="help">DirectCloud ドライブを PC に割り当てている文字（例: W）。入れておくと、その文字で始まるパスが DirectCloud のフォルダの絵になります。パスに「DirectCloud」が入っていれば入れなくても見分けます。クリックでエクスプローラーが開きます（ドライブが接続されているとき）。</p></div>
+    <p class="help">テーマ・送信キー・ドライブの文字はこのブラウザだけの設定です。</p>
   </section>
 
   <section class="spane" data-tab="notify" hidden>
@@ -421,6 +424,7 @@ const LK_ICON={
   slack:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="3.6" height="9.4" rx="1.8" fill="#36C5F0"/><rect x="12.6" y="8" width="9.4" height="3.6" rx="1.8" fill="#2EB67D"/><rect x="12.4" y="12.6" width="3.6" height="9.4" rx="1.8" fill="#ECB22E"/><rect x="2" y="12.4" width="9.4" height="3.6" rx="1.8" fill="#E01E5A"/></svg>',
   amazon:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="5" fill="#232F3E"/><text x="12" y="14" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="13" fill="#fff">a</text><path d="M6 17c3.6 2.2 8.4 2.2 12 0" stroke="#FF9900" stroke-width="1.9" fill="none" stroke-linecap="round"/></svg>',
   folder:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h4.6l2 2H20a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5z" fill="#E9B739"/><path d="M2.5 9.5h19v8A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5z" fill="#F7D060"/></svg>',
+  directcloud:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h4.6l2 2H20a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5z" fill="#1565C0"/><path d="M2.5 9.5h19v8A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5z" fill="#2F8DEB"/><path d="M9.2 16.6a2.1 2.1 0 0 1 .3-4.2 2.9 2.9 0 0 1 5.5.5 1.9 1.9 0 0 1-.2 3.7z" fill="#fff"/></svg>',
   file:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h8l4.5 4.5v13A1.5 1.5 0 0 1 17 21.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5z" fill="#8A93A6"/><path d="M14 2.5V7h4.5z" fill="#C9CEDA"/></svg>',
   drive:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 3h7.6l6.2 10.7h-7.6z" fill="#FFC107"/><path d="M8.2 3 2 13.7l3.8 6.6L12 9.6z" fill="#1FA463"/><path d="M5.8 20.3h12.4l3.8-6.6H9.6z" fill="#4285F4"/></svg>',
   youtube:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000"/><path d="M10 9v6l5.2-3z" fill="#fff"/></svg>',
@@ -431,6 +435,7 @@ const LK_ICON={
   mitsubishi:lkBadge('三菱','#E60012'), omron:lkBadge('OM','#005EB8'), keyence:lkBadge('KE','#E60012'), pdf:lkBadge('PDF','#D93025'), excel:lkBadge('X','#1D6F42'), word:lkBadge('W','#2B579A'), cad:lkBadge('DWG','#B5121B'),
 };
 const LK_APPS=[   // [正規表現（ホスト名＋パス）, アイコン, 名前]
+  [/(^|\.)directcloud\.(jp|com)/,'directcloud','DirectCloud'],
   [/(^|\.)slack\.com/,'slack','Slack'],[/(^|\.)(amazon\.(co\.jp|com)|amzn\.(to|asia))/,'amazon','Amazon'],
   [/(^|\.)(a360\.co|autodesk360\.com|autodesk\.com)|fusion/,'fusion','Fusion'],[/(^|\.)github\.com/,'github','GitHub'],
   [/docs\.google\.com\/spreadsheets/,'gsheet','スプレッドシート'],[/docs\.google\.com/,'gdoc','Google ドキュメント'],[/drive\.google\.com/,'drive','Google ドライブ'],[/meet\.google\.com/,'gmeet','Meet'],[/mail\.google\.com/,'gmail','Gmail'],
@@ -439,11 +444,13 @@ const LK_APPS=[   // [正規表現（ホスト名＋パス）, アイコン, 名
   [/monotaro\.com/,'monotaro','モノタロウ'],[/misumi-ec\.com/,'misumi','MISUMI'],[/rs-online\.com/,'rs','RS'],[/digikey\./,'digikey','Digi-Key'],[/mouser\./,'mouser','Mouser'],[/(element14|farnell)\.com/,'farnell','ファーネル'],
   [/mitsubishielectric\./,'mitsubishi','三菱電機'],[/omron\./,'omron','オムロン'],[/keyence\./,'keyence','キーエンス'],
 ];
+let dcDrive=''; try{ dcDrive=(localStorage.getItem('dcDrive')||'').replace(/[^A-Za-z]/g,'').slice(0,1); }catch(e){}   // DirectCloud ドライブの文字（⚙ 一般）
 function lkInfo(u){
   if(/^(\\\\|[A-Za-z]:[\\/])/.test(u)){                       // Windows のパス
     const ext=(u.match(/\.([A-Za-z0-9]{2,5})$/)||[])[1]?.toLowerCase(), name=u.replace(/[\\/]+$/,'').split(/[\\/]/).pop();
     const ic=!ext?'folder':ext==='pdf'?'pdf':/^xls|csv/.test(ext)?'excel':/^doc/.test(ext)?'word':/^(dwg|dxf|f3d|step|stp)$/.test(ext)?'cad':'file';
-    return {icon:ic, name:name||'フォルダ', app:ext?'ファイル':'フォルダ', local:true};
+    const dc=/directcloud|ダイレクトクラウド/i.test(u)||(dcDrive&&new RegExp('^'+dcDrive+':','i').test(u));      // DirectCloud ドライブ（PC にドライブとして出ているもの）
+    return {icon:(dc&&!ext)?'directcloud':ic, name:name||'フォルダ', app:dc?'DirectCloud':(ext?'ファイル':'フォルダ'), local:true};
   }
   if(/^fusion360:/i.test(u)) return {icon:'fusion',name:'Fusion',app:'Fusion'};
   let host='', path=''; try{ const x=new URL(u); host=x.hostname.replace(/^www\./,''); path=x.pathname; }catch(e){ return {icon:'web',name:u.slice(0,24),app:'リンク'}; }
@@ -457,14 +464,17 @@ function lkChip(u,mode='icon',label=''){
   const attrs=i.local?`href="#" data-open="${a(u)}"`:`href="${a(u)}" target="_blank" rel="noopener"`;
   return `<a class="lk${mode==='icon'?' lk-icon':''}" ${attrs} title="${a(i.app+': '+u)}">${LK_ICON[i.icon]||LK_ICON.web}<span class="lkname">${esc(label||i.name)}</span></a>`;
 }
-const LK_RE=/(https?:\/\/[^\s<>"'「」『』（）]+|fusion360:\/\/[^\s<>"']+|\\\\[^\s\\<>"']+\\[^\s<>"']+|[A-Za-z]:\\[^\s<>"'|?*]+)/g;
+/* パスは「"…"」で囲めば空白入りでも全部、囲まなくても途中のフォルダ名の半角空白 1 つまでは拾う（W:\01 設計\盤図）。最後の名前は空白で終わる */
+const LK_SEG=String.raw`(?:[^\s<>"'|?*\\]+(?: [^\s<>"'|?*\\]+)*\\)*[^\s<>"'|?*\\]*`;
+const LK_RE=new RegExp(String.raw`("(?:\\\\|[A-Za-z]:\\)[^"\n]+"|https?:\/\/[^\s<>"'「」『』（）]+|fusion360:\/\/[^\s<>"']+|\\\\[^\s\\<>"']+\\`+LK_SEG+String.raw`|[A-Za-z]:\\`+LK_SEG+')','g');
 /* 素の文字（タスク・気づき・メモリ・自分の発言）の中の URL / パスをアイコンにする。mode: icon = 絵だけ / chip = 絵＋名前 */
 function linkify(text,mode='icon'){
   let out='', last=0, m; const src=String(text??''); LK_RE.lastIndex=0;
   while((m=LK_RE.exec(src))){
-    let u=m[0]; const trail=(u.match(/[.,;:!?。、）)\]】』」]+$/)||[''])[0]; if(trail) u=u.slice(0,-trail.length);
+    let u=m[0]; if(u[0]==='"') u=u.slice(1,-1);            // 囲みの「"」は外す
+    const trail=(u.match(/[.,;:!?。、）)\]】』」]+$/)||[''])[0]; if(trail) u=u.slice(0,-trail.length);
     let before=src.slice(last,m.index);
-    before=before.replace(/(?:slack|url|リンク|link|参考|amazon|fusion|フォルダ|場所|パス)\s*[:：]\s*$/i,'');   // 「Slack: https://…」の見出しは絵で分かるので外す
+    before=before.replace(/(?:slack|url|リンク|link|参考|amazon|fusion|フォルダ|場所|パス|directcloud|ダイレクトクラウド)\s*[:：]\s*$/i,'');   // 「Slack: https://…」の見出しは絵で分かるので外す
     out+=esc(before)+lkChip(u,mode)+esc(trail); last=m.index+m[0].length;
   }
   return out+esc(src.slice(last));
@@ -1144,6 +1154,8 @@ async function loadSites(){ try{ sitesCache=(await (await fetch('/parts/sites'))
 $('#siteAdd').onclick=()=>{ const n=$('#siteName').value.trim(), u=$('#siteUrl').value.trim(); if(!n) return; if(u&&!u.includes('{q}')){ showSet('URL に {q}（型式が入る所）を入れてください','ng'); return; }
   const ex=sitesCache.find(s=>s.name===n); if(ex){ ex.url=u||ex.url; ex.on=true; } else sitesCache.push({name:n,url:u,on:!!u,note:''}); $('#siteName').value=''; $('#siteUrl').value=''; renderSites(); };
 $('#sitesSave').onclick=async()=>{ try{ const r=await (await fetch('/parts/sites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sites:sitesCache})})).json(); showSet(r.ok?'サイト一覧を保存しました':'保存できませんでした',r.ok?'ok':'ng'); }catch(e){ showSet('保存できませんでした','ng'); } };
+$('#dcDriveIn').value=dcDrive.toUpperCase();
+$('#dcDriveIn').onchange=e=>{ dcDrive=e.target.value.replace(/[^A-Za-z]/g,'').slice(0,1); e.target.value=dcDrive.toUpperCase(); try{ localStorage.setItem('dcDrive',dcDrive); }catch(e2){} loadTasks(); };
 /* 設定のタブ。最後に開いたタブを覚える。認証エラーで開いたときは「API キー」 */
 function setTab(name){ document.querySelectorAll('.stabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name))); document.querySelectorAll('.spane').forEach(p=>p.hidden=p.dataset.tab!==name); try{ localStorage.setItem('setTab',name); }catch(e){} }
 document.querySelectorAll('.stabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
